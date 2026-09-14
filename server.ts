@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 
 async function startServer() {
   const app = express();
+  app.set("trust proxy", 1); // Trust first proxy (Cloud Run / Nginx)
   const PORT = 3000;
 
   // Phase 8: API Security & Rate Limiting
@@ -22,6 +23,7 @@ async function startServer() {
     max: 1000, // Limit each IP to 1000 requests per `window`
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // Suppress proxy header validation warnings
     message: { error: 'Too many requests, please try again later.' }
   });
   

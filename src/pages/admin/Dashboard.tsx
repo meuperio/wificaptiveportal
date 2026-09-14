@@ -17,10 +17,10 @@ export default function Dashboard() {
   );
 
   const cards = [
-    { title: 'Active Rooms', value: stats.activeRooms, icon: BedDouble, trend: '+2', trendUp: true },
-    { title: 'Wi-Fi Sessions', value: stats.activeSessions, icon: Wifi, trend: '+14%', trendUp: true },
-    { title: 'Failed Attempts', value: stats.failedAttempts, icon: AlertCircle, trend: '-3%', trendUp: false },
-    { title: 'Daily Unique Users', value: stats.wifiUsersToday, icon: Users, trend: '+8%', trendUp: true },
+    { title: 'Active Rooms', value: stats.activeRooms, icon: BedDouble },
+    { title: 'Wi-Fi Sessions', value: stats.activeSessions, icon: Wifi, trend: stats.sessionsTrendStr, trendUp: stats.sessionsTrendUp },
+    { title: 'Failed Attempts', value: stats.failedAttempts, icon: AlertCircle, trend: stats.failedTrendStr, trendUp: stats.failedTrendUp },
+    { title: 'Daily Unique Users', value: stats.wifiUsersToday, icon: Users, trend: stats.usersTrendStr, trendUp: stats.usersTrendUp },
   ];
 
   return (
@@ -37,10 +37,12 @@ export default function Dashboard() {
             </div>
             <div className="flex items-baseline gap-3">
               <h3 className="text-3xl font-bold text-slate-900 tracking-tight">{card.value}</h3>
-              <div className={`flex items-center text-xs font-medium ${card.trendUp ? (card.title === 'Failed Attempts' ? 'text-red-600' : 'text-emerald-600') : (card.title === 'Failed Attempts' ? 'text-emerald-600' : 'text-red-600')}`}>
-                {card.trendUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-                {card.trend}
-              </div>
+              {card.trend && (
+                <div className={`flex items-center text-xs font-medium ${card.trendUp ? (card.title === 'Failed Attempts' ? 'text-red-600' : 'text-emerald-600') : (card.title === 'Failed Attempts' ? 'text-emerald-600' : 'text-red-600')}`}>
+                  {card.trendUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                  {card.trend}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -68,7 +70,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Application Node</p>
-                <p className="text-sm font-semibold text-slate-900">Operational</p>
+                <p className="text-sm font-semibold text-slate-900">{stats.applicationStatus}</p>
               </div>
             </div>
             
@@ -77,14 +79,11 @@ export default function Dashboard() {
                 <div className="w-10 h-10 rounded-md bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-600">
                   <Database className="w-5 h-5" />
                 </div>
-                <span className="flex h-2.5 w-2.5 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
+                <span className={`flex h-2.5 w-2.5 rounded-full ${stats.databaseStatus === 'ONLINE' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
               </div>
               <div>
                 <p className="text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Firebase / Firestore</p>
-                <p className="text-sm font-semibold text-slate-900">Connected</p>
+                <p className="text-sm font-semibold text-slate-900">{stats.databaseStatus}</p>
               </div>
             </div>
 
@@ -108,23 +107,25 @@ export default function Dashboard() {
           <h2 className="text-base font-semibold text-slate-900 mb-6">Recent Connections</h2>
           <div className="space-y-4">
              {/* Mocking recent connections for visual completeness of the SaaS dashboard */}
-             {[
-               { room: 'Room 302', time: '2 mins ago', status: 'Success' },
-               { room: 'Room 510', time: '14 mins ago', status: 'Success' },
-               { room: 'Room 105', time: '1 hr ago', status: 'Failed' },
-               { room: 'Room 412', time: '2 hrs ago', status: 'Success' },
-             ].map((evt, idx) => (
-               <div key={idx} className="flex items-center justify-between">
-                 <div className="flex items-center gap-3">
-                   <div className={`w-2 h-2 rounded-full ${evt.status === 'Success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                   <div>
-                     <p className="text-sm font-medium text-slate-900">{evt.room}</p>
-                     <p className="text-xs text-slate-500">Authentication {evt.status.toLowerCase()}</p>
+             {(stats.recentConnections || []).length === 0 ? (
+               <p className="text-sm text-slate-500">No recent connections.</p>
+             ) : (
+               stats.recentConnections.map((evt: any, idx: number) => {
+                 const timeStr = new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                 return (
+                   <div key={idx} className="flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                       <div className={`w-2 h-2 rounded-full ${evt.status === 'SUCCESS' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                       <div>
+                         <p className="text-sm font-medium text-slate-900">Room {evt.roomNumber}</p>
+                         <p className="text-xs text-slate-500">Authentication {evt.status}</p>
+                       </div>
+                     </div>
+                     <span className="text-xs font-medium text-slate-400">{timeStr}</span>
                    </div>
-                 </div>
-                 <span className="text-xs font-medium text-slate-400">{evt.time}</span>
-               </div>
-             ))}
+                 );
+               })
+             )}
           </div>
         </div>
       </div>

@@ -116,82 +116,102 @@ router.put('/my-password', requireAdmin, async (req, res) => {
 });
 
 // Dashboard Stats (All roles can view dashboard)
+
 router.get('/dashboard', requireAdmin, async (req, res) => {
   const rooms = await DbClient.getRooms();
   let sessions = await DbClient.getSessions();
-  const { start, end } = req.query;
-  if (start && start !== 'undefined' && start !== '') sessions = sessions.filter(s => new Date(s.started_at || 0) >= new Date(start as string));
-  if (end && end !== 'undefined' && end !== '') sessions = sessions.filter(s => new Date(s.started_at || 0) <= new Date(end as string));
   const authLogs = await DbClient.getAllAuthAttempts();
   
   const activeRooms = rooms.filter(r => r.status === 'ACTIVE').length;
   const activeSessions = sessions.filter(s => s.session_status === 'ACTIVE').length;
   
-  const failedAttempts = authLogs.filter((a: any) => a.result !== 'SUCCESS').length;
-  
-  // Calculate real daily users (unique client MACs connected today)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todaySessions = sessions.filter(s => new Date(s.started_at) >= today);
-  const uniqueUsersToday = new Set(todaySessions.map(s => s.client_mac || s.network_username)).size;
-
   // Real RADIUS status
   const radiusStatus = await radius.getStatus();
+
+  // Database connectivity check
+  let databaseStatus = "OFFLINE";
+  try {
+    const testRooms = await DbClient.getRooms();
+    if (testRooms) databaseStatus = "ONLINE";
+  } catch (e) {
+    databaseStatus = "OFFLINE";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  // Daily unique users
+  const todaySessions = sessions.filter(s => new Date(s.started_at) >= today);
+  const wifiUsersToday = new Set(todaySessions.map(s => s.client_mac || s.network_username)).size;
+
+  const yesterdaySessions = sessions.filter(s => {
+    const d = new Date(s.started_at);
+    return d >= yesterday && d < today;
+  });
+  const wifiUsersYesterday = new Set(yesterdaySessions.map(s => s.client_mac || s.network_username)).size;
+  
+  let usersTrendStr = undefined;
+  let usersTrendUp = true;
+  if (wifiUsersYesterday > 0) {
+    const pct = Math.round(((wifiUsersToday - wifiUsersYesterday) / wifiUsersYesterday) * 100);
+    usersTrendStr = pct >= 0 ? `+${pct}%` : `${pct}%`;
+    usersTrendUp = pct >= 0;
+  }
+
+  // Failed attempts
+  const failedToday = authLogs.filter((a: any) => a.result !== 'SUCCESS' && new Date(a.timestamp) >= today).length;
+  const failedYesterday = authLogs.filter((a: any) => a.result !== 'SUCCESS' && new Date(a.timestamp) >= yesterday && new Date(a.timestamp) < today).length;
+  
+  let failedTrendStr = undefined;
+  let failedTrendUp = true;
+  if (failedYesterday > 0) {
+    const pct = Math.round(((failedToday - failedYesterday) / failedYesterday) * 100);
+    failedTrendStr = pct >= 0 ? `+${pct}%` : `${pct}%`;
+    failedTrendUp = pct >= 0; // up is "bad" for failed
+  }
+
+  // Active Sessions trend is harder since it's a point-in-time state, but we can do total sessions today vs yesterday
+  const totalSessionsToday = todaySessions.length;
+  const totalSessionsYesterday = yesterdaySessions.length;
+  
+  let sessionsTrendStr = undefined;
+  let sessionsTrendUp = true;
+  if (totalSessionsYesterday > 0) {
+    const pct = Math.round(((totalSessionsToday - totalSessionsYesterday) / totalSessionsYesterday) * 100);
+    sessionsTrendStr = pct >= 0 ? `+${pct}%` : `${pct}%`;
+    sessionsTrendUp = pct >= 0;
+  }
+
+  // Recent connections from auth logs
+  const sortedAuth = [...authLogs].sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const recentConnections = sortedAuth.slice(0, 5).map((l: any) => ({
+    roomNumber: l.room_number,
+    status: l.result,
+    timestamp: l.timestamp,
+    clientMac: l.client_mac || 'Unknown'
+  }));
 
   res.json({
     activeRooms,
     activeSessions,
-    wifiUsersToday: uniqueUsersToday,
-    failedAttempts,
-    expiredRecords: rooms.filter(r => r.status === 'EXPIRED').length,
-    radiusServerStatus: radiusStatus
+    sessionsTrendStr,
+    sessionsTrendUp,
+    wifiUsersToday,
+    usersTrendStr,
+    usersTrendUp,
+    failedAttempts: failedToday,
+    failedTrendStr,
+    failedTrendUp,
+    applicationStatus: "ONLINE",
+    databaseStatus,
+    radiusServerStatus: radiusStatus,
+    recentConnections
   });
 });
 
-// Rooms Management
-router.get('/rooms', requireAdmin, requireRole(['IT_ADMIN', 'FRONT_DESK', 'VIEWER']), async (req, res) => {
-  const rooms = await DbClient.getRooms();
-  
-  if (needsMasking((req as any).admin.role)) {
-    const maskedRooms = rooms.map(r => ({
-      ...r,
-      patient_last_name: maskSurname(r.patient_last_name)
-    }));
-    return res.json(maskedRooms);
-  }
-  
-  res.json(rooms); 
-});
-
-router.post('/rooms', requireAdmin, requireRole(['IT_ADMIN', 'FRONT_DESK']), async (req, res) => {
-  const { room_number, patient_last_name, valid_until, access_profile } = req.body;
-  
-  if (!room_number || !patient_last_name) {
-    return res.status(400).json({ error: 'Room number and patient last name are required' });
-  }
-
-  const roomData = {
-    room_number: room_number.toUpperCase(),
-    patient_last_name: patient_last_name.toUpperCase(),
-    status: 'ACTIVE',
-    valid_from: new Date().toISOString(),
-    valid_until: valid_until || new Date(Date.now() + 86400000 * 3).toISOString(),
-    max_devices: 3,
-    access_profile: access_profile || 'STANDARD'
-  };
-
-  const newRoom = await DbClient.addRoom(roomData);
-
-  await DbClient.logAudit({
-    timestamp: new Date().toISOString(),
-    administrator: (req as any).admin.username,
-    action: 'Room Created',
-    module: 'Rooms',
-    record_id: newRoom.id.toString(),
-  });
-
-  res.json({ success: true, room: newRoom });
-});
 
 router.put('/rooms/:id', requireAdmin, requireRole(['IT_ADMIN', 'FRONT_DESK']), async (req, res) => {
   const id = req.params.id;

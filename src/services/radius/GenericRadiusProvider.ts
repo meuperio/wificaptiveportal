@@ -21,11 +21,34 @@ export class GenericRadiusProvider implements RadiusProvider {
   }
 
   protected getAccessProfileAttributes(accessProfile?: string, settings?: any): string[][] {
-    // Override this in vendor adapters
-    // Standard IETF doesn't have a single way to define bandwidth out of the box,
-    // usually it's vendor specific like WISPr-Bandwidth-Max-Up, but we just return empty
-    // unless specified in derived classes.
-    return [];
+    if (!accessProfile || !settings || !settings.bandwidthPolicies) {
+      return [];
+    }
+
+    const policy = settings.bandwidthPolicies[accessProfile.toUpperCase()];
+    if (!policy) {
+      return [];
+    }
+
+    const attributes: string[][] = [];
+    
+    // Standard RFC2865 attribute for policy assignment
+    attributes.push(['Filter-Id', accessProfile.toUpperCase()]);
+    
+    // We can optionally inject standard session timeouts here if the policy defines it
+    if (policy.sessionTimeout) {
+      attributes.push(['Session-Timeout', policy.sessionTimeout.toString()]);
+    }
+    
+    // Note: Standard RADIUS does not have an official RFC attribute for bandwidth limits.
+    // The most universally accepted standard is the WISPr dictionary (Vendor-Specific 14122).
+    // In a fully configured system, you would add:
+    // attributes.push(['WISPr-Bandwidth-Max-Up', (policy.upKbps * 1024).toString()]);
+    // attributes.push(['WISPr-Bandwidth-Max-Down', (policy.downKbps * 1024).toString()]);
+    
+    // For the Generic provider, we rely on Filter-Id which most controllers map internally to a local profile.
+    
+    return attributes;
   }
 
   protected async getActiveConfig() {
