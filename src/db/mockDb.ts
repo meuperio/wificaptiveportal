@@ -21,6 +21,11 @@ export const mockDb = {
     sessionTimeout: 28800,
     maxDevicesPerRoom: 3,
     rateLimitFailures: 20,
+    bandwidthProfiles: {
+      STANDARD: { downMbps: 10, upMbps: 10 },
+      PREMIUM: { downMbps: 50, upMbps: 50 },
+      VIP: { downMbps: 100, upMbps: 100 }
+    },
     radiusHost: '127.0.0.1',
     radiusPort: 1812,
     radiusAccountingPort: 1813,

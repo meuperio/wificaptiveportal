@@ -20,7 +20,7 @@ export class GenericRadiusProvider implements RadiusProvider {
     radius.add_dictionary('dictionary.rfc3576'); // for CoA/Disconnect
   }
 
-  protected getAccessProfileAttributes(accessProfile?: string): string[][] {
+  protected getAccessProfileAttributes(accessProfile?: string, settings?: any): string[][] {
     // Override this in vendor adapters
     // Standard IETF doesn't have a single way to define bandwidth out of the box,
     // usually it's vendor specific like WISPr-Bandwidth-Max-Up, but we just return empty
@@ -38,7 +38,8 @@ export class GenericRadiusProvider implements RadiusProvider {
           port: settings.radiusPort || 1812,
           acctPort: settings.radiusAccountingPort || 1813,
           secret: settings.radiusSecret || this.secret,
-          timeoutMs: settings.radiusTimeout || 3000
+          timeoutMs: settings.radiusTimeout || 3000,
+          settingsObj: settings
         };
       }
     } catch (e) {
@@ -49,7 +50,8 @@ export class GenericRadiusProvider implements RadiusProvider {
       port: this.port,
       acctPort: 1813,
       secret: this.secret,
-      timeoutMs: 3000
+      timeoutMs: 3000,
+      settingsObj: {}
     };
   }
 
@@ -98,7 +100,7 @@ export class GenericRadiusProvider implements RadiusProvider {
       ...(request.apMac ? [['Called-Station-Id', `${request.apMac}${request.ssid ? ':' + request.ssid : ''}`]] : []),
       ...(request.clientIp ? [['Framed-IP-Address', request.clientIp]] : []),
       ...(request.sessionTimeout ? [['Session-Timeout', request.sessionTimeout.toString()]] : []),
-      ...this.getAccessProfileAttributes(request.accessProfile)
+      ...this.getAccessProfileAttributes(request.accessProfile, config.settingsObj)
     ];
 
     try {

@@ -260,6 +260,50 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Bandwidth Policies */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900 mb-4 pb-2">Bandwidth Policies</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {['STANDARD', 'PREMIUM', 'VIP'].map((profile) => (
+              <div key={profile} className="p-4 border border-slate-200 rounded-lg bg-slate-50">
+                <h3 className="font-medium text-sm text-slate-900 mb-3">{profile} Tier</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Download (Mbps)</label>
+                    <input
+                      type="number"
+                      value={settings.bandwidthProfiles?.[profile]?.downMbps || 10}
+                      onChange={e => setSettings(prev => ({ 
+                        ...prev, 
+                        bandwidthProfiles: {
+                          ...(prev.bandwidthProfiles || {}),
+                          [profile]: { ...(prev.bandwidthProfiles?.[profile] || {}), downMbps: parseInt(e.target.value) || 1 }
+                        }
+                      }))}
+                      className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Upload (Mbps)</label>
+                    <input
+                      type="number"
+                      value={settings.bandwidthProfiles?.[profile]?.upMbps || 10}
+                      onChange={e => setSettings(prev => ({ 
+                        ...prev, 
+                        bandwidthProfiles: {
+                          ...(prev.bandwidthProfiles || {}),
+                          [profile]: { ...(prev.bandwidthProfiles?.[profile] || {}), upMbps: parseInt(e.target.value) || 1 }
+                        }
+                      }))}
+                      className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* RADIUS Settings */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
           <div className="flex items-center justify-between mb-4 pb-2">

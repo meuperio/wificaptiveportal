@@ -53,6 +53,39 @@ router.post('/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// Admin change own password
+router.put('/my-password', requireAdmin, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: 'Old password and new password are required' });
+  }
+
+  const admin = await DbClient.getAdminById((req as any).admin.id);
+  if (!admin) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const isMatch = await bcrypt.compare(oldPassword, admin.password_hash);
+  if (!isMatch) {
+    return res.status(401).json({ error: 'Incorrect old password' });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const password_hash = await bcrypt.hash(newPassword, salt);
+  
+  await DbClient.updateAdmin(admin.id, { password_hash });
+  
+  await DbClient.logAudit({
+    timestamp: new Date().toISOString(),
+    administrator: admin.username,
+    action: `Password Changed`,
+    module: 'Users',
+    record_id: String(admin.id),
+  });
+
+  res.json({ success: true });
+});
+
 // Middleware for Admin Auth
 const requireAdmin = (req: any, res: any, next: any) => {
   const token = req.cookies.admin_token;

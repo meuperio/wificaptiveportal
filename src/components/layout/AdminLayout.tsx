@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Outlet, Navigate, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, BedDouble, Activity, Users, LogOut, HeartPulse, Search, Bell, Settings as SettingsIcon, Menu, X, ShieldAlert, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, BedDouble, Activity, Users, LogOut, KeyRound, HeartPulse, Search, Bell, Settings as SettingsIcon, Menu, X, ShieldAlert, ClipboardList } from 'lucide-react';
 
 export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ oldPassword: '', newPassword: '', error: '', success: '', loading: false });
 
   // Simplified auth check for MVP
   const hasToken = localStorage.getItem('admin_auth') === 'true';
@@ -22,6 +24,29 @@ export default function AdminLayout() {
     localStorage.removeItem('admin_auth');
     localStorage.removeItem('admin_user');
     navigate('/admin/login');
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwdForm(prev => ({ ...prev, error: '', success: '', loading: true }));
+    try {
+      const res = await fetch('/api/v1/admin/my-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPwdForm(prev => ({ ...prev, success: 'Password updated successfully!', oldPassword: '', newPassword: '' }));
+        setTimeout(() => setShowPasswordModal(false), 2000);
+      } else {
+        setPwdForm(prev => ({ ...prev, error: data.error || 'Failed to update password' }));
+      }
+    } catch (err) {
+      setPwdForm(prev => ({ ...prev, error: 'Network error occurred' }));
+    } finally {
+      setPwdForm(prev => ({ ...prev, loading: false }));
+    }
   };
 
   const navItems = [
@@ -100,6 +125,16 @@ export default function AdminLayout() {
             </div>
           </div>
           <button
+            onClick={() => {
+              setPwdForm({ oldPassword: '', newPassword: '', error: '', success: '', loading: false });
+              setShowPasswordModal(true);
+            }}
+            className="flex items-center justify-center gap-2 px-3 py-2 w-full rounded-md text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors mb-1"
+          >
+            <KeyRound className="w-4 h-4" />
+            Change Password
+          </button>
+          <button
             onClick={handleLogout}
             className="flex items-center justify-center gap-2 px-3 py-2 w-full rounded-md text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
           >
@@ -145,10 +180,81 @@ export default function AdminLayout() {
           </div>
         </header>
         
+        {adminUser?.username === 'admin' && (
+          <div className="bg-red-50 border-b border-red-100 px-4 py-2 flex items-center justify-center gap-2 shrink-0">
+            <ShieldAlert className="w-4 h-4 text-red-600" />
+            <span className="text-sm text-red-700 font-medium">Security Warning: You are using the default seeded 'admin' account. Please change your password immediately.</span>
+          </div>
+        )}
+        
         <div className="flex-1 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </div>
       </main>
+
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h3 className="text-lg font-bold text-slate-900">Change Password</h3>
+              <button onClick={() => setShowPasswordModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleChangePassword} className="p-6">
+              {pwdForm.error && (
+                <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100">
+                  {pwdForm.error}
+                </div>
+              )}
+              {pwdForm.success && (
+                <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm border border-green-100">
+                  {pwdForm.success}
+                </div>
+              )}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Old Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={pwdForm.oldPassword}
+                    onChange={e => setPwdForm(prev => ({ ...prev, oldPassword: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={pwdForm.newPassword}
+                    onChange={e => setPwdForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pwdForm.loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-madocs-blue hover:bg-madocs-blue-light rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {pwdForm.loading ? 'Saving...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
