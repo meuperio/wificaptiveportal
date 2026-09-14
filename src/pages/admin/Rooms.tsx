@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, PowerOff, X } from 'lucide-react';
 
 export default function Rooms() {

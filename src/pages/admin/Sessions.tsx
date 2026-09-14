@@ -9,11 +9,11 @@ export default function Sessions() {
 
   useEffect(() => {
     fetchSessions();
-  }, []);
+  }, [startDate, endDate]);
 
   const fetchSessions = async () => {
     try {
-      const res = await fetch('/api/v1/admin/sessions');
+      const res = await fetch(`/api/v1/admin/sessions?start=${startDate}&end=${endDate}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -44,7 +44,7 @@ export default function Sessions() {
   };
 
   const handleDownloadCsv = () => {
-    window.open('/api/v1/admin/reports/sessions/csv', '_blank');
+    window.open(`/api/v1/admin/reports/sessions/csv?start=${startDate}&end=${endDate}`, '_blank');
   };
 
   return (
@@ -78,6 +78,7 @@ export default function Sessions() {
                 <th className="py-3 px-6">Identity</th>
                 <th className="py-3 px-6">Status</th>
                 <th className="py-3 px-6">MAC Address</th>
+                <th className="py-3 px-6">Data Usage</th>
                 <th className="py-3 px-6">Login Time</th>
                 <th className="py-3 px-6">RADIUS ID</th>
                 <th className="py-3 px-6 text-right">Actions</th>
@@ -97,6 +98,13 @@ export default function Sessions() {
                   </td>
                   <td className="py-3 px-6 text-sm text-slate-500 font-mono">
                     {session.client_mac || '-'}
+                  </td>
+                  <td className="py-3 px-6 text-sm text-slate-500">
+                    {session.input_octets !== undefined || session.output_octets !== undefined ? (
+                      <span className="text-slate-600 font-mono text-xs">
+                        ↓{((session.output_octets || 0) / 1024 / 1024).toFixed(1)}MB ↑{((session.input_octets || 0) / 1024 / 1024).toFixed(1)}MB
+                      </span>
+                    ) : '-'}
                   </td>
                   <td className="py-3 px-6 text-sm text-slate-500">
                     {new Date(session.started_at).toLocaleString()}

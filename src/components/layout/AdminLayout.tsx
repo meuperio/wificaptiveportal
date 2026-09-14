@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Outlet, Navigate, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, BedDouble, Activity, Users, LogOut, KeyRound, HeartPulse, Search, Bell, Settings as SettingsIcon, Menu, X, ShieldAlert, ClipboardList } from 'lucide-react';
 

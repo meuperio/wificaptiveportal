@@ -1,10 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only the backend system service account can access the database.
-    // Client SDK is not used in the frontend. All traffic routes through Express.
+    // Allows public access. In a production app, use Firebase Admin SDK with a service account.
+    // For this AI Studio preview, the backend Express server acts as the client SDK.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
   }
 }

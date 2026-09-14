@@ -4,9 +4,11 @@ import { ShieldAlert, CheckCircle2, XCircle, Search, Download } from 'lucide-rea
 export default function AuthLogs() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
-    fetch('/api/v1/admin/authentication-logs')
+    fetch(`/api/v1/admin/authentication-logs?start=${startDate}&end=${endDate}`)
       .then(res => res.json())
       .then(data => {
         setLogs(data.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
@@ -16,10 +18,10 @@ export default function AuthLogs() {
         console.error("Failed to load auth logs", err);
         setLoading(false);
       });
-  }, []);
+  }, [startDate, endDate]);
 
   const handleDownloadCsv = () => {
-    window.open('/api/v1/admin/reports/authentication-logs/csv', '_blank');
+    window.open(`/api/v1/admin/reports/authentication-logs/csv?start=${startDate}&end=${endDate}`, '_blank');
   };
 
   return (
@@ -42,13 +44,28 @@ export default function AuthLogs() {
             </div>
             <h3 className="font-semibold text-slate-800">Authentication Logs</h3>
           </div>
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="flex items-center gap-3">
             <input 
-              type="text" 
-              placeholder="Filter logs..." 
-              className="pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:border-madocs-blue"
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:border-madocs-blue"
             />
+            <span className="text-sm text-slate-500">to</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:border-madocs-blue"
+            />
+            <div className="relative ml-2">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="text" 
+                placeholder="Search..." 
+                className="pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:border-madocs-blue"
+              />
+            </div>
           </div>
         </div>
         

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { DbClient } from '../db/db.ts';
 import jwt from 'jsonwebtoken';
-import { mockDb } from '../db/mockDb.ts';
+
 import { getRadiusProvider } from '../services/radius/index.ts';
 import { Parser } from 'json2csv';
 import bcrypt from 'bcryptjs';
@@ -53,6 +53,35 @@ router.post('/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// Middleware for Admin Auth
+const requireAdmin = (req: any, res: any, next: any) => {
+  const token = req.cookies.admin_token;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.admin = decoded;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
+const requireRole = (allowedRoles: string[]) => {
+  return (req: any, res: any, next: any) => {
+    if (!req.admin || !req.admin.role) {
+      return res.status(403).json({ error: 'Role not found' });
+    }
+    if (!allowedRoles.includes(req.admin.role) && req.admin.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Forbidden: Insufficient privileges' });
+    }
+    next();
+  };
+};
+
 // Admin change own password
 router.put('/my-password', requireAdmin, async (req, res) => {
   const { oldPassword, newPassword } = req.body;
@@ -86,39 +115,13 @@ router.put('/my-password', requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
-// Middleware for Admin Auth
-const requireAdmin = (req: any, res: any, next: any) => {
-  const token = req.cookies.admin_token;
-  
-  if (!token) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.admin = decoded;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: 'Invalid or expired token' });
-  }
-};
-
-const requireRole = (allowedRoles: string[]) => {
-  return (req: any, res: any, next: any) => {
-    if (!req.admin || !req.admin.role) {
-      return res.status(403).json({ error: 'Role not found' });
-    }
-    if (!allowedRoles.includes(req.admin.role) && req.admin.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ error: 'Forbidden: Insufficient privileges' });
-    }
-    next();
-  };
-};
-
 // Dashboard Stats (All roles can view dashboard)
 router.get('/dashboard', requireAdmin, async (req, res) => {
   const rooms = await DbClient.getRooms();
-  const sessions = await DbClient.getSessions();
+  let sessions = await DbClient.getSessions();
+  const { start, end } = req.query;
+  if (start && start !== 'undefined' && start !== '') sessions = sessions.filter(s => new Date(s.started_at || 0) >= new Date(start as string));
+  if (end && end !== 'undefined' && end !== '') sessions = sessions.filter(s => new Date(s.started_at || 0) <= new Date(end as string));
   const authLogs = await DbClient.getAllAuthAttempts();
   
   const activeRooms = rooms.filter(r => r.status === 'ACTIVE').length;
@@ -194,28 +197,47 @@ router.put('/rooms/:id', requireAdmin, requireRole(['IT_ADMIN', 'FRONT_DESK']), 
   const id = req.params.id;
   const { status: newStatus, room_number, patient_last_name, valid_until, access_profile } = req.body;
   
-  if (newStatus) {
-    await DbClient.updateRoomStatus(id, newStatus);
-  }
-
-  // Update other details if provided
-  const room = await DbClient.getRoomByNumber(room_number) || mockDb.rooms.find(r => String(r.id) === id);
-  if (room) {
-    if (room_number) room.room_number = room_number;
-    if (patient_last_name) room.patient_last_name = patient_last_name;
-    if (valid_until) room.valid_until = valid_until;
-    if (access_profile) room.access_profile = access_profile;
-    if (newStatus) room.status = newStatus;
+  const updates: any = {};
+  if (newStatus) updates.status = newStatus;
+  if (room_number) updates.room_number = room_number;
+  if (patient_last_name) updates.patient_last_name = patient_last_name;
+  if (valid_until) updates.valid_until = valid_until;
+  if (access_profile) updates.access_profile = access_profile;
+  
+  if (Object.keys(updates).length > 0) {
+    await DbClient.updateRoom(id, updates);
   }
   
   if (newStatus === 'DISCHARGED' || newStatus === 'EXPIRED') {
     const activeSessions = await DbClient.getActiveSessionsByRoom(id);
     for (const session of activeSessions) {
       if (session.network_username && session.radius_session_id) {
-        await radius.disconnect({
-          username: session.network_username,
-          radiusSessionId: session.radius_session_id
-        });
+        try {
+          const success = await radius.disconnect({
+            username: session.network_username,
+            radiusSessionId: session.radius_session_id,
+            clientIp: session.client_ip
+          });
+          if (!success) {
+            console.warn(`[Network] Failed to disconnect session ${session.radius_session_id} via RADIUS CoA.`);
+            await DbClient.logAudit({
+              timestamp: new Date().toISOString(),
+              administrator: 'SYSTEM',
+              action: `CoA Disconnect Failed for ${session.network_username}`,
+              module: 'Network',
+              record_id: String(session.id),
+            });
+          }
+        } catch (err: any) {
+          console.error(`[Network] Error disconnecting session ${session.radius_session_id}:`, err.message);
+          await DbClient.logAudit({
+            timestamp: new Date().toISOString(),
+            administrator: 'SYSTEM',
+            action: `CoA Disconnect Error for ${session.network_username}`,
+            module: 'Network',
+            record_id: String(session.id),
+          });
+        }
       }
       await DbClient.disconnectSession(String(session.id));
     }
@@ -252,10 +274,32 @@ router.post('/sessions/:id/disconnect', requireAdmin, requireRole(['IT_ADMIN']),
   
   const session = await DbClient.getSession(id);
   if (session && session.network_username && session.radius_session_id) {
-    await radius.disconnect({
-      username: session.network_username,
-      radiusSessionId: session.radius_session_id
-    });
+    try {
+      const success = await radius.disconnect({
+        username: session.network_username,
+        radiusSessionId: session.radius_session_id,
+        clientIp: session.client_ip
+      });
+      if (!success) {
+        console.warn(`[Network] Failed to disconnect session ${session.radius_session_id} via RADIUS CoA.`);
+        await DbClient.logAudit({
+          timestamp: new Date().toISOString(),
+          administrator: 'SYSTEM',
+          action: `CoA Disconnect Failed for ${session.network_username}`,
+          module: 'Network',
+          record_id: String(session.id),
+        });
+      }
+    } catch (err: any) {
+      console.error(`[Network] Error disconnecting session ${session.radius_session_id}:`, err.message);
+      await DbClient.logAudit({
+        timestamp: new Date().toISOString(),
+        administrator: 'SYSTEM',
+        action: `CoA Disconnect Error for ${session.network_username}`,
+        module: 'Network',
+        record_id: String(session.id),
+      });
+    }
   }
 
   await DbClient.disconnectSession(id);
@@ -278,10 +322,32 @@ router.post('/sessions/:id/block', requireAdmin, requireRole(['IT_ADMIN']), asyn
   if (session && session.client_mac) {
     // 1. Disconnect them from RADIUS
     if (session.network_username && session.radius_session_id) {
-      await radius.disconnect({
-        username: session.network_username,
-        radiusSessionId: session.radius_session_id
-      });
+      try {
+        const success = await radius.disconnect({
+          username: session.network_username,
+          radiusSessionId: session.radius_session_id,
+          clientIp: session.client_ip
+        });
+        if (!success) {
+          console.warn(`[Network] Failed to disconnect session ${session.radius_session_id} via RADIUS CoA.`);
+          await DbClient.logAudit({
+            timestamp: new Date().toISOString(),
+            administrator: 'SYSTEM',
+            action: `CoA Disconnect Failed for ${session.network_username} (Block)`,
+            module: 'Network',
+            record_id: String(session.id),
+          });
+        }
+      } catch (err: any) {
+        console.error(`[Network] Error disconnecting session ${session.radius_session_id}:`, err.message);
+        await DbClient.logAudit({
+          timestamp: new Date().toISOString(),
+          administrator: 'SYSTEM',
+          action: `CoA Disconnect Error for ${session.network_username} (Block)`,
+          module: 'Network',
+          record_id: String(session.id),
+        });
+      }
     }
 
     // 2. Disconnect session locally
@@ -306,7 +372,10 @@ router.post('/sessions/:id/block', requireAdmin, requireRole(['IT_ADMIN']), asyn
 
 // Logs
 router.get('/authentication-logs', requireAdmin, requireRole(['IT_ADMIN', 'VIEWER']), async (req, res) => {
-  const logs = await DbClient.getAllAuthAttempts();
+  let logs = await DbClient.getAllAuthAttempts();
+  const { start, end } = req.query;
+  if (start && start !== 'undefined' && start !== '') logs = logs.filter(l => new Date(l.timestamp || 0) >= new Date(start as string));
+  if (end && end !== 'undefined' && end !== '') logs = logs.filter(l => new Date(l.timestamp || 0) <= new Date(end as string));
   
   if (needsMasking((req as any).admin.role)) {
     const mapped = logs.map(l => ({ ...l, patient_last_name: maskSurname(l.patient_last_name) }));
@@ -317,7 +386,10 @@ router.get('/authentication-logs', requireAdmin, requireRole(['IT_ADMIN', 'VIEWE
 });
 
 router.get('/audit-logs', requireAdmin, requireRole([]), async (req, res) => { // SUPER_ADMIN only
-  const logs = await DbClient.getAllAuditLogs();
+  let logs = await DbClient.getAllAuditLogs();
+  const { start, end } = req.query;
+  if (start && start !== 'undefined' && start !== '') logs = logs.filter(l => new Date(l.timestamp || 0) >= new Date(start as string));
+  if (end && end !== 'undefined' && end !== '') logs = logs.filter(l => new Date(l.timestamp || 0) <= new Date(end as string));
   const mapped = logs.map(l => ({ ...l, action: maskSurnameInAction(l.action) }));
   res.json(mapped);
 });
@@ -352,7 +424,10 @@ router.post('/settings/test-radius', requireAdmin, requireRole([]), async (req, 
 
 // Reports (CSV Exports)
 router.get('/reports/sessions/csv', requireAdmin, requireRole(['IT_ADMIN', 'VIEWER', 'FRONT_DESK']), async (req, res) => {
-  const sessions = await DbClient.getSessions();
+  let sessions = await DbClient.getSessions();
+  const { start, end } = req.query;
+  if (start && start !== 'undefined' && start !== '') sessions = sessions.filter(s => new Date(s.started_at || 0) >= new Date(start as string));
+  if (end && end !== 'undefined' && end !== '') sessions = sessions.filter(s => new Date(s.started_at || 0) <= new Date(end as string));
   const data = needsMasking((req as any).admin.role) 
     ? sessions.map(s => ({ ...s, patient_last_name: maskSurname(s.patient_last_name) }))
     : sessions;
@@ -369,7 +444,10 @@ router.get('/reports/sessions/csv', requireAdmin, requireRole(['IT_ADMIN', 'VIEW
 });
 
 router.get('/reports/authentication-logs/csv', requireAdmin, requireRole(['IT_ADMIN', 'VIEWER']), async (req, res) => {
-  const logs = await DbClient.getAllAuthAttempts();
+  let logs = await DbClient.getAllAuthAttempts();
+  const { start, end } = req.query;
+  if (start && start !== 'undefined' && start !== '') logs = logs.filter(l => new Date(l.timestamp || 0) >= new Date(start as string));
+  if (end && end !== 'undefined' && end !== '') logs = logs.filter(l => new Date(l.timestamp || 0) <= new Date(end as string));
   const data = needsMasking((req as any).admin.role)
     ? logs.map(l => ({ ...l, patient_last_name: maskSurname(l.patient_last_name) }))
     : logs;
@@ -386,7 +464,10 @@ router.get('/reports/authentication-logs/csv', requireAdmin, requireRole(['IT_AD
 });
 
 router.get('/reports/audit-logs/csv', requireAdmin, requireRole([]), async (req, res) => {
-  const logs = await DbClient.getAllAuditLogs();
+  let logs = await DbClient.getAllAuditLogs();
+  const { start, end } = req.query;
+  if (start && start !== 'undefined' && start !== '') logs = logs.filter(l => new Date(l.timestamp || 0) >= new Date(start as string));
+  if (end && end !== 'undefined' && end !== '') logs = logs.filter(l => new Date(l.timestamp || 0) <= new Date(end as string));
   const mapped = logs.map(l => ({ ...l, action: maskSurnameInAction(l.action) }));
   try {
     const parser = new Parser();
@@ -500,6 +581,19 @@ router.delete('/users/:id', requireAdmin, requireRole([]), async (req, res) => {
   });
 
   res.json({ success: true });
+});
+
+
+
+
+// Purge old data
+router.post('/purge', requireAdmin, requireRole(['SUPER_ADMIN', 'IT_ADMIN']), async (req, res) => {
+  try {
+    const result = await DbClient.purgeOldData();
+    res.json({ success: true, result });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to purge old data', details: err.message });
+  }
 });
 
 export default router;

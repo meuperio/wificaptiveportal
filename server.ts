@@ -3,21 +3,33 @@ import path from 'path';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { createServer as createViteServer } from 'vite';
-import { initMockDb } from './src/db/mockDb.ts';
 import apiRouter from './src/api/index.ts';
-import { DbClient } from "./src/db/db.ts";
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 async function startServer() {
-  DbClient.authenticateBackend();
   const app = express();
   const PORT = 3000;
+
+  // Phase 8: API Security & Rate Limiting
+  app.use(helmet({
+    contentSecurityPolicy: false, // Vite HMR needs this disabled in dev
+    crossOriginEmbedderPolicy: false
+  }));
+
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // Limit each IP to 1000 requests per `window`
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' }
+  });
+  
+  app.use('/api', limiter);
 
   app.use(cors());
   app.use(express.json());
   app.use(cookieParser());
-
-  // Initialize DB (Mock)
-  initMockDb();
 
   // API Routes
   app.use('/api/v1', apiRouter);

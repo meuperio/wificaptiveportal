@@ -153,7 +153,7 @@ export class GenericRadiusProvider implements RadiusProvider {
       });
 
       // RADIUS CoA typically uses port 3799
-      const coaPort = (config as any).coaPort || 3799;
+      const coaPort = (config as any).settingsObj?.radiusCoaPort || 3799;
       const response = await this.sendUdpPacket(encoded, coaPort);
       const decoded = radius.decode({ packet: response, secret: config.secret });
       
@@ -166,8 +166,33 @@ export class GenericRadiusProvider implements RadiusProvider {
   }
 
   async changeAuthorization(request: any): Promise<boolean> {
-    console.log(`[RADIUS LIVE] Sending CoA-Request`);
-    return true; // Simplified for now
+    const config = await this.getActiveConfig();
+    console.log(`[RADIUS LIVE] Sending CoA-Request for ${request.username}`);
+    
+    const attributes: string[][] = [
+      ['User-Name', request.username],
+      ...(request.radiusSessionId ? [['Acct-Session-Id', request.radiusSessionId]] : []),
+      ...(request.clientIp ? [['Framed-IP-Address', request.clientIp]] : []),
+    ];
+
+    try {
+      const encoded = radius.encode({
+        code: 'CoA-Request',
+        secret: config.secret,
+        attributes: attributes
+      });
+
+      // RADIUS CoA typically uses port 3799
+      const coaPort = (config as any).settingsObj?.radiusCoaPort || 3799;
+      const response = await this.sendUdpPacket(encoded, coaPort);
+      const decoded = radius.decode({ packet: response, secret: config.secret });
+      
+      console.log(`[RADIUS LIVE] Received ${decoded.code}`);
+      return decoded.code === 'CoA-ACK';
+    } catch (error: any) {
+      console.error('[RADIUS LIVE] Error in CoA-Request:', error.message);
+      return false;
+    }
   }
 
   async accounting(request: AccountingRequest): Promise<boolean> {
