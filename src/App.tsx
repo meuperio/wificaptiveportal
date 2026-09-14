@@ -12,6 +12,8 @@ import Rooms from './pages/admin/Rooms';
 import Sessions from './pages/admin/Sessions';
 import AdminLogin from './pages/admin/AdminLogin';
 import Settings from './pages/admin/Settings';
+import AuthLogs from './pages/admin/AuthLogs';
+import AuditLogs from './pages/admin/AuditLogs';
 
 export default function App() {
   return (
@@ -27,6 +29,8 @@ export default function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="rooms" element={<Rooms />} />
           <Route path="sessions" element={<Sessions />} />
+          <Route path="auth-logs" element={<AuthLogs />} />
+          <Route path="audit-logs" element={<AuditLogs />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

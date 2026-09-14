@@ -5,7 +5,13 @@ export default function Settings() {
   const [settings, setSettings] = useState({
     hospitalName: '',
     portalMessage: '',
-    logoUrl: ''
+    logoUrl: '',
+    primaryColor: '#003366',
+    termsText: '',
+    privacyLink: '',
+    radiusHost: '',
+    radiusPort: 1812,
+    radiusSecret: ''
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -119,6 +125,81 @@ export default function Settings() {
               rows={3}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
               placeholder="Welcome to our Guest Wi-Fi"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Primary Brand Color (Hex)</label>
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-10 h-10 rounded-lg border border-slate-200 shrink-0" 
+                  style={{ backgroundColor: settings.primaryColor || '#003366' }} 
+                />
+                <input
+                  type="text"
+                  value={settings.primaryColor}
+                  onChange={e => setSettings(prev => ({ ...prev, primaryColor: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue uppercase"
+                  placeholder="#003366"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Privacy Notice Link URL</label>
+              <input
+                type="url"
+                value={settings.privacyLink}
+                onChange={e => setSettings(prev => ({ ...prev, privacyLink: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue mt-0 md:mt-[42px]"
+                placeholder="https://hospital.org/privacy"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Terms and Conditions</label>
+            <textarea
+              value={settings.termsText}
+              onChange={e => setSettings(prev => ({ ...prev, termsText: e.target.value }))}
+              rows={2}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+              placeholder="By using this network..."
+            />
+          </div>
+        </div>
+
+        {/* RADIUS Settings */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900 mb-4 pb-2">RADIUS Server Configuration</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">RADIUS Host IP</label>
+              <input
+                type="text"
+                value={settings.radiusHost}
+                onChange={e => setSettings(prev => ({ ...prev, radiusHost: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue font-mono text-sm"
+                placeholder="10.0.0.50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">RADIUS Port</label>
+              <input
+                type="number"
+                value={settings.radiusPort}
+                onChange={e => setSettings(prev => ({ ...prev, radiusPort: parseInt(e.target.value) || 1812 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue font-mono text-sm"
+                placeholder="1812"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Shared Secret</label>
+            <input
+              type="password"
+              value={settings.radiusSecret}
+              onChange={e => setSettings(prev => ({ ...prev, radiusSecret: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue font-mono text-sm"
+              placeholder="••••••••••••"
             />
           </div>
         </div>

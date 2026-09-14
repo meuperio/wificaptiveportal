@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Navigate, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, BedDouble, Activity, Users, LogOut, HeartPulse, Search, Bell, Settings as SettingsIcon, Menu, X } from 'lucide-react';
+import { LayoutDashboard, BedDouble, Activity, Users, LogOut, HeartPulse, Search, Bell, Settings as SettingsIcon, Menu, X, ShieldAlert, ClipboardList } from 'lucide-react';
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -24,6 +24,8 @@ export default function AdminLayout() {
     { name: 'Overview', path: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Room Directory', path: '/admin/rooms', icon: BedDouble },
     { name: 'Active Sessions', path: '/admin/sessions', icon: Activity },
+    { name: 'Auth Logs', path: '/admin/auth-logs', icon: ShieldAlert },
+    { name: 'Audit Trail', path: '/admin/audit-logs', icon: ClipboardList },
     { name: 'Settings', path: '/admin/settings', icon: SettingsIcon },
   ];
 

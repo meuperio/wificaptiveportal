@@ -34,6 +34,20 @@ export const DbClient = {
     await addDoc(collection(db, 'sessions'), data);
   },
 
+  async getAuthAttemptsByRoom(roomNumber: string) {
+    if (!auth.currentUser) return mockDb.authAttempts.filter(a => a.room_number === roomNumber);
+    const q = query(collection(db, 'authLogs'), where('room_number', '==', roomNumber));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async getActiveSessionsByRoom(roomId: string) {
+    if (!auth.currentUser) return mockDb.wifiSessions.filter(s => String(s.room_id) === String(roomId) && s.session_status === 'ACTIVE');
+    const q = query(collection(db, 'sessions'), where('room_id', '==', String(roomId)), where('session_status', '==', 'ACTIVE'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
   async getAdmin(username: string) {
     if (!auth.currentUser) return mockDb.adminUsers.find(a => a.username === username);
     const q = query(collection(db, 'admins'), where('username', '==', username));
@@ -72,6 +86,27 @@ export const DbClient = {
   async getSessions() {
     if (!auth.currentUser) return mockDb.wifiSessions;
     const snap = await getDocs(collection(db, 'sessions'));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async getSession(id: string) {
+    if (!auth.currentUser) {
+      const s = mockDb.wifiSessions.find(s => String(s.id) === id);
+      return s ? { id: s.id, ...s } : null;
+    }
+    const snap = await getDoc(doc(db, 'sessions', id));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  },
+
+  async getAllAuthAttempts() {
+    if (!auth.currentUser) return mockDb.authAttempts;
+    const snap = await getDocs(collection(db, 'authLogs'));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async getAllAuditLogs() {
+    if (!auth.currentUser) return mockDb.auditLogs;
+    const snap = await getDocs(collection(db, 'auditLogs'));
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 

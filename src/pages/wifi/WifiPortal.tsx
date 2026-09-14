@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Wifi, HeartPulse, Shield, AlertCircle } from 'lucide-react';
 
 export default function WifiPortal() {
+  const [searchParams] = useSearchParams();
   const [roomNumber, setRoomNumber] = useState('');
   const [patientLastName, setPatientLastName] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -9,6 +11,7 @@ export default function WifiPortal() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [redirectUrl, setRedirectUrl] = useState('');
 
   const [settings, setSettings] = useState<any>({ hospitalName: 'MADOCS+', portalMessage: 'Enter patient details to authenticate your device on the network.', logoUrl: '' });
 
@@ -40,16 +43,28 @@ export default function WifiPortal() {
     setLoading(true);
 
     try {
+      // NET-001: Capture Wireless Controller Parameters
+      const networkData = {
+        client_mac: searchParams.get('client_mac') || searchParams.get('mac') || '',
+        ap_mac: searchParams.get('ap_mac') || searchParams.get('ap') || '',
+        ssid: searchParams.get('ssid') || '',
+        wlan: searchParams.get('wlan') || '',
+        redirect_url: searchParams.get('redirect_url') || searchParams.get('url') || ''
+      };
+
       const res = await fetch('/api/v1/wifi/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomNumber, patientLastName })
+        body: JSON.stringify({ roomNumber, patientLastName, networkData })
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
         setSuccess(true);
+        if (networkData.redirect_url) {
+          setRedirectUrl(networkData.redirect_url);
+        }
       } else {
         setError(data.error || 'Unable to complete Wi-Fi authentication. Please contact hospital staff.');
       }
@@ -69,7 +84,21 @@ export default function WifiPortal() {
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">Connected Successfully</h2>
           <p className="text-sm text-slate-600 mb-8 leading-relaxed">You are now securely connected to the {settings.hospitalName || 'Manila Doctors Hospital'} guest network.</p>
-          <button className="w-full bg-slate-50 text-slate-700 font-medium py-2.5 rounded-md hover:bg-slate-100 border border-slate-200 transition-colors text-sm">
+          
+          {redirectUrl ? (
+            <a 
+              href={redirectUrl}
+              style={{ backgroundColor: settings.primaryColor || '#003366' }}
+              className="block w-full text-white font-medium py-2.5 rounded-md hover:opacity-90 transition-opacity text-sm mb-3"
+            >
+              Continue to Internet
+            </a>
+          ) : null}
+
+          <button 
+            onClick={() => window.close()}
+            className="w-full bg-slate-50 text-slate-700 font-medium py-2.5 rounded-md hover:bg-slate-100 border border-slate-200 transition-colors text-sm"
+          >
             Close Window
           </button>
         </div>
@@ -138,7 +167,7 @@ export default function WifiPortal() {
                 />
               </div>
               <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors leading-tight">
-                I accept the <a href="#" className="text-madocs-blue hover:underline">Terms of Service</a> and Acceptable Use Policy.
+                {settings.termsText || 'I accept the Terms of Service and Acceptable Use Policy.'}
               </span>
             </label>
             
@@ -152,7 +181,7 @@ export default function WifiPortal() {
                 />
               </div>
               <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors leading-tight flex items-center gap-1.5">
-                I acknowledge the <a href="#" className="text-madocs-blue hover:underline">Privacy Notice</a>
+                I acknowledge the <a href={settings.privacyLink || '#'} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: settings.primaryColor || '#003366' }}>Privacy Notice</a>
               </span>
             </label>
           </div>
@@ -160,7 +189,8 @@ export default function WifiPortal() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-4 bg-madocs-blue text-white text-sm font-semibold py-2.5 rounded-md hover:bg-madocs-blue-light focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-madocs-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+            style={{ backgroundColor: settings.primaryColor || '#003366' }}
+            className="w-full mt-4 text-white text-sm font-semibold py-2.5 rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
           >
             {loading ? 'Authenticating...' : 'Connect to Network'}
           </button>

@@ -2,9 +2,11 @@ import { Router } from 'express';
 import { DbClient } from '../db/db.ts';
 import jwt from 'jsonwebtoken';
 import { mockDb } from '../db/mockDb.ts';
+import { getRadiusProvider } from '../services/radius/index.ts';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-do-not-use-in-prod';
+const radius = getRadiusProvider();
 
 // Admin Login
 router.post('/login', async (req, res) => {
@@ -39,10 +41,8 @@ router.post('/logout', (req, res) => {
 const requireAdmin = (req: any, res: any, next: any) => {
   const token = req.cookies.admin_token;
   
-  // For this mock prototype since we are using localStorage to maintain login state on the frontend:
   if (!token) {
-    req.admin = { username: 'admin', role: 'SUPER_ADMIN' };
-    return next();
+    return res.status(401).json({ error: 'Authentication required' });
   }
   
   try {
@@ -58,14 +58,19 @@ const requireAdmin = (req: any, res: any, next: any) => {
 router.get('/dashboard', requireAdmin, async (req, res) => {
   const rooms = await DbClient.getRooms();
   const sessions = await DbClient.getSessions();
+  const authLogs = await DbClient.getAllAuthAttempts();
+  
   const activeRooms = rooms.filter(r => r.status === 'ACTIVE').length;
   const activeSessions = sessions.filter(s => s.session_status === 'ACTIVE').length;
+  
+  // Real stats replacing the mocks
+  const failedAttempts = authLogs.filter((a: any) => a.result !== 'SUCCESS').length;
   
   res.json({
     activeRooms,
     activeSessions,
-    wifiUsersToday: activeSessions, // Mock
-    failedAttempts: 0,
+    wifiUsersToday: activeSessions, // Number of active devices
+    failedAttempts,
     expiredRecords: rooms.filter(r => r.status === 'EXPIRED').length,
     radiusServerStatus: 'ONLINE (MOCK)'
   });
@@ -109,12 +114,27 @@ router.post('/rooms', requireAdmin, async (req, res) => {
 
 router.put('/rooms/:id', requireAdmin, async (req, res) => {
   const id = req.params.id;
-  await DbClient.updateRoomStatus(id, req.body.status);
+  const newStatus = req.body.status;
+  await DbClient.updateRoomStatus(id, newStatus);
   
+  // RADIUS Enforcement (ROOM-003): Disconnect all sessions if discharged or expired
+  if (newStatus === 'DISCHARGED' || newStatus === 'EXPIRED') {
+    const activeSessions = await DbClient.getActiveSessionsByRoom(id);
+    for (const session of activeSessions) {
+      if (session.network_username && session.radius_session_id) {
+        await radius.disconnect({
+          username: session.network_username,
+          radiusSessionId: session.radius_session_id
+        });
+      }
+      await DbClient.disconnectSession(String(session.id));
+    }
+  }
+
   await DbClient.logAudit({
     timestamp: new Date().toISOString(),
     administrator: (req as any).admin.username,
-    action: 'Room Updated',
+    action: `Room Updated to ${newStatus}`,
     module: 'Rooms',
     record_id: id.toString(),
   });
@@ -130,6 +150,16 @@ router.get('/sessions', requireAdmin, async (req, res) => {
 
 router.post('/sessions/:id/disconnect', requireAdmin, async (req, res) => {
   const id = req.params.id;
+  
+  // RADIUS Enforcement (SES-002)
+  const session = await DbClient.getSession(id);
+  if (session && session.network_username && session.radius_session_id) {
+    await radius.disconnect({
+      username: session.network_username,
+      radiusSessionId: session.radius_session_id
+    });
+  }
+
   await DbClient.disconnectSession(id);
   
   await DbClient.logAudit({
@@ -144,12 +174,14 @@ router.post('/sessions/:id/disconnect', requireAdmin, async (req, res) => {
 });
 
 // Logs
-router.get('/authentication-logs', requireAdmin, (req, res) => {
-  res.json(mockDb.authAttempts);
+router.get('/authentication-logs', requireAdmin, async (req, res) => {
+  const logs = await DbClient.getAllAuthAttempts();
+  res.json(logs);
 });
 
-router.get('/audit-logs', requireAdmin, (req, res) => {
-  res.json(mockDb.auditLogs);
+router.get('/audit-logs', requireAdmin, async (req, res) => {
+  const logs = await DbClient.getAllAuditLogs();
+  res.json(logs);
 });
 
 // Settings Management

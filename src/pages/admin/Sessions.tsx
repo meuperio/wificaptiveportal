@@ -55,6 +55,7 @@ export default function Sessions() {
               <tr className="bg-slate-50 border-b border-slate-200 text-sm font-medium text-slate-500">
                 <th className="py-3 px-6">Identity</th>
                 <th className="py-3 px-6">Status</th>
+                <th className="py-3 px-6">MAC Address</th>
                 <th className="py-3 px-6">Login Time</th>
                 <th className="py-3 px-6">RADIUS ID</th>
                 <th className="py-3 px-6 text-right">Actions</th>
@@ -71,6 +72,9 @@ export default function Sessions() {
                     }`}>
                       {session.session_status}
                     </span>
+                  </td>
+                  <td className="py-3 px-6 text-sm text-slate-500 font-mono">
+                    {session.client_mac || '-'}
                   </td>
                   <td className="py-3 px-6 text-sm text-slate-500">
                     {new Date(session.started_at).toLocaleString()}
@@ -92,7 +96,7 @@ export default function Sessions() {
               ))}
               {sessions.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-500">No active sessions found.</td>
+                  <td colSpan={6} className="py-8 text-center text-slate-500">No active sessions found.</td>
                 </tr>
               )}
             </tbody>

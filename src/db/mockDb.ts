@@ -11,6 +11,12 @@ export const mockDb = {
     hospitalName: 'General Hospital',
     portalMessage: 'Welcome to our Guest Wi-Fi',
     logoUrl: '' as string,
+    primaryColor: '#003366',
+    termsText: 'By using this service, you agree to our Terms of Service and Acceptable Use Policy.',
+    privacyLink: '#',
+    radiusHost: '127.0.0.1',
+    radiusPort: 1812,
+    radiusSecret: 'testing123'
   }
 };
 
