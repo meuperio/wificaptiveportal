@@ -16,19 +16,29 @@ router.post('/validate', async (req, res) => {
 
     const room = String(roomNumber).trim().toUpperCase();
     const lastName = String(patientLastName).trim().toUpperCase();
+    const clientIp = req.ip || req.connection.remoteAddress || 'UNKNOWN';
+    const clientMac = networkData?.client_mac || 'UNKNOWN';
 
-    // Rate Limiting (WIFI-003)
+    // Rate Limiting (WIFI-003 & Security Requirements)
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    const attempts = await DbClient.getAuthAttemptsByRoom(room);
+    const allAttempts = await DbClient.getAllAuthAttempts();
     
-    // Count failures in the last 10 minutes
-    const recentFailures = attempts.filter((a: any) => 
+    // Check global IP/MAC rate limit (e.g. 20 failures per 10 mins globally)
+    const recentGlobalFailures = allAttempts.filter((a: any) => 
       a.result !== 'SUCCESS' && 
-      new Date(a.created_at) > tenMinutesAgo
+      new Date(a.created_at) > tenMinutesAgo &&
+      (a.client_ip === clientIp || (clientMac !== 'UNKNOWN' && a.client_mac === clientMac))
     );
 
-    if (recentFailures.length >= 5) {
-      return res.status(429).json({ error: 'Too many failed attempts. Please wait 10 minutes before trying again or contact hospital staff.' });
+    if (recentGlobalFailures.length >= 20) {
+      return res.status(429).json({ error: 'Too many requests from this device. Please wait 10 minutes before trying again.' });
+    }
+
+    // Check room-specific rate limit (e.g. 5 failures per 10 mins for this room by this client)
+    const recentRoomFailures = recentGlobalFailures.filter((a: any) => a.room_number === room);
+
+    if (recentRoomFailures.length >= 5) {
+      return res.status(429).json({ error: 'Too many failed attempts for this room. Please wait 10 minutes before trying again or contact hospital staff.' });
     }
 
     // Search active room/patient records
@@ -38,6 +48,8 @@ router.post('/validate', async (req, res) => {
       // Record failure
       await DbClient.logAuthAttempt({
         room_number: room,
+        client_ip: clientIp,
+        client_mac: clientMac,
         result: 'INVALID_CREDENTIALS',
         created_at: new Date().toISOString()
       });
@@ -47,6 +59,8 @@ router.post('/validate', async (req, res) => {
     if (record.status !== 'ACTIVE') {
       await DbClient.logAuthAttempt({
         room_number: room,
+        client_ip: clientIp,
+        client_mac: clientMac,
         result: 'EXPIRED',
         failure_reason: `Status is ${record.status}`,
         created_at: new Date().toISOString()
@@ -58,6 +72,8 @@ router.post('/validate', async (req, res) => {
     if (new Date(record.valid_from) > now || new Date(record.valid_until) < now) { 
        await DbClient.logAuthAttempt({
         room_number: room,
+        client_ip: clientIp,
+        client_mac: clientMac,
         result: 'EXPIRED',
         failure_reason: 'Outside validity period',
         created_at: new Date().toISOString()
@@ -70,6 +86,8 @@ router.post('/validate', async (req, res) => {
     if (activeSessions.length >= (record.max_devices || 3)) {
       await DbClient.logAuthAttempt({
         room_number: room,
+        client_ip: clientIp,
+        client_mac: clientMac,
         result: 'POLICY_REJECT',
         failure_reason: `Max devices (${record.max_devices || 3}) reached`,
         created_at: new Date().toISOString()
@@ -85,12 +103,16 @@ router.post('/validate', async (req, res) => {
       username: tempIdentity,
       clientMac: networkData?.client_mac,
       apMac: networkData?.ap_mac,
-      ssid: networkData?.ssid
+      ssid: networkData?.ssid,
+      clientIp,
+      accessProfile: record.access_profile
     });
 
     if (!radiusRes.success) {
       await DbClient.logAuthAttempt({
         room_number: room,
+        client_ip: clientIp,
+        client_mac: clientMac,
         result: 'RADIUS_FAILURE',
         created_at: new Date().toISOString()
       });
@@ -112,6 +134,8 @@ router.post('/validate', async (req, res) => {
     // Record success
     await DbClient.logAuthAttempt({
       room_number: room,
+      client_ip: clientIp,
+      client_mac: clientMac,
       result: 'SUCCESS',
       created_at: new Date().toISOString()
     });

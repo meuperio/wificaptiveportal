@@ -28,6 +28,24 @@ export function initMockDb() {
       username: 'admin',
       password_hash: 'admin', // Very insecure MVP mock
       role: 'SUPER_ADMIN'
+    },
+    {
+      id: 2,
+      username: 'itadmin',
+      password_hash: 'itadmin',
+      role: 'IT_ADMIN'
+    },
+    {
+      id: 3,
+      username: 'frontdesk',
+      password_hash: 'frontdesk',
+      role: 'FRONT_DESK'
+    },
+    {
+      id: 4,
+      username: 'viewer',
+      password_hash: 'viewer',
+      role: 'VIEWER'
     }
   ];
 

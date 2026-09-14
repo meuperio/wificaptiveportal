@@ -4,8 +4,13 @@ import { Plus, Search, Edit2, Trash2, PowerOff, X } from 'lucide-react';
 export default function Rooms() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newRoomData, setNewRoomData] = useState({ room_number: '', patient_last_name: '', days_valid: 3 });
+  const [newRoomData, setNewRoomData] = useState({ room_number: '', patient_last_name: '', days_valid: 3, access_profile: 'STANDARD' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const adminUserStr = localStorage.getItem('admin_user');
+  const adminUser = adminUserStr ? JSON.parse(adminUserStr) : null;
+  const userRole = adminUser?.role || 'VIEWER';
+  const canManageRooms = ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK'].includes(userRole);
 
   useEffect(() => {
     fetchRooms();
@@ -52,7 +57,8 @@ export default function Rooms() {
       body: JSON.stringify({
         room_number: newRoomData.room_number,
         patient_last_name: newRoomData.patient_last_name,
-        valid_until: validUntil
+        valid_until: validUntil,
+        access_profile: newRoomData.access_profile
       })
     });
 
@@ -60,7 +66,7 @@ export default function Rooms() {
 
     if (res.ok) {
       setIsModalOpen(false);
-      setNewRoomData({ room_number: '', patient_last_name: '', days_valid: 3 });
+      setNewRoomData({ room_number: '', patient_last_name: '', days_valid: 3, access_profile: 'STANDARD' });
       fetchRooms();
     }
   };
@@ -69,12 +75,14 @@ export default function Rooms() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-900">Room Management</h1>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-madocs-blue text-white px-4 py-2.5 rounded-lg font-medium hover:bg-madocs-blue-light transition-colors flex items-center gap-2 shadow-sm"
-        >
-          <Plus className="w-4 h-4" /> Add Room / Patient
-        </button>
+        {canManageRooms && (
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-madocs-blue text-white px-4 py-2.5 rounded-lg font-medium hover:bg-madocs-blue-light transition-colors flex items-center gap-2 shadow-sm"
+          >
+            <Plus className="w-4 h-4" /> Add Room / Patient
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -118,10 +126,12 @@ export default function Rooms() {
                     {new Date(room.valid_until).toLocaleDateString()}
                   </td>
                   <td className="py-3 px-6 text-right space-x-2">
-                    <button className="p-1.5 text-slate-400 hover:text-madocs-blue rounded-md hover:bg-madocs-surface transition-colors" title="Edit">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    {room.status === 'ACTIVE' && (
+                    {canManageRooms && (
+                      <button className="p-1.5 text-slate-400 hover:text-madocs-blue rounded-md hover:bg-madocs-surface transition-colors" title="Edit">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {room.status === 'ACTIVE' && canManageRooms && (
                       <button 
                         onClick={() => handleDischarge(room.id)}
                         className="p-1.5 text-slate-400 hover:text-orange-600 rounded-md hover:bg-orange-50 transition-colors" title="Discharge">
@@ -190,6 +200,17 @@ export default function Rooms() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
                     required
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Access Profile</label>
+                  <select
+                    value={newRoomData.access_profile}
+                    onChange={(e) => setNewRoomData({ ...newRoomData, access_profile: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue bg-white"
+                  >
+                    <option value="STANDARD">Standard (5 Mbps)</option>
+                    <option value="PREMIUM">Premium (20 Mbps)</option>
+                  </select>
                 </div>
               </div>
               

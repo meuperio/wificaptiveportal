@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { WifiOff, Search } from 'lucide-react';
+import { WifiOff, Search, Download } from 'lucide-react';
 
 export default function Sessions() {
   const [sessions, setSessions] = useState<any[]>([]);
+  const adminUserStr = localStorage.getItem('admin_user');
+  const adminUser = adminUserStr ? JSON.parse(adminUserStr) : null;
+  const userRole = adminUser?.role || 'VIEWER';
 
   useEffect(() => {
     fetchSessions();
@@ -33,9 +36,21 @@ export default function Sessions() {
     fetchSessions();
   };
 
+  const handleDownloadCsv = () => {
+    window.open('/api/v1/admin/reports/sessions/csv', '_blank');
+  };
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">Wi-Fi Sessions</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900">Wi-Fi Sessions</h1>
+        <button
+          onClick={handleDownloadCsv}
+          className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm text-sm"
+        >
+          <Download className="w-4 h-4" /> Export CSV
+        </button>
+      </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-200 flex items-center gap-4">
@@ -83,7 +98,7 @@ export default function Sessions() {
                     {session.radius_session_id}
                   </td>
                   <td className="py-3 px-6 text-right">
-                    {session.session_status === 'ACTIVE' && (
+                    {session.session_status === 'ACTIVE' && ['SUPER_ADMIN', 'IT_ADMIN'].includes(userRole) && (
                       <button 
                         onClick={() => handleDisconnect(session.id)}
                         className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700 font-medium ml-auto px-2 py-1 hover:bg-red-50 rounded-md transition-colors"

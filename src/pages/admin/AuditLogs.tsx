@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ClipboardList, Search } from 'lucide-react';
+import { ClipboardList, Search, Download } from 'lucide-react';
 
 export default function AuditLogs() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -18,8 +18,22 @@ export default function AuditLogs() {
       });
   }, []);
 
+  const handleDownloadCsv = () => {
+    window.open('/api/v1/admin/reports/audit-logs/csv', '_blank');
+  };
+
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900">System Audit Logs</h1>
+        <button
+          onClick={handleDownloadCsv}
+          className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm text-sm"
+        >
+          <Download className="w-4 h-4" /> Export CSV
+        </button>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-slate-200/60 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200/60 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -5,6 +5,7 @@ export interface AuthRequest {
   clientIp?: string;
   ssid?: string;
   apMac?: string;
+  accessProfile?: string;
 }
 
 export interface AuthResponse {

@@ -9,6 +9,9 @@ export default function AdminLayout() {
 
   // Simplified auth check for MVP
   const hasToken = localStorage.getItem('admin_auth') === 'true';
+  const adminUserStr = localStorage.getItem('admin_user');
+  const adminUser = adminUserStr ? JSON.parse(adminUserStr) : null;
+  const userRole = adminUser?.role || 'VIEWER';
   
   if (!hasToken) {
     return <Navigate to="/admin/login" replace />;
@@ -17,17 +20,18 @@ export default function AdminLayout() {
   const handleLogout = async () => {
     await fetch('/api/v1/admin/logout', { method: 'POST' });
     localStorage.removeItem('admin_auth');
+    localStorage.removeItem('admin_user');
     navigate('/admin/login');
   };
 
   const navItems = [
-    { name: 'Overview', path: '/admin/dashboard', icon: LayoutDashboard },
-    { name: 'Room Directory', path: '/admin/rooms', icon: BedDouble },
-    { name: 'Active Sessions', path: '/admin/sessions', icon: Activity },
-    { name: 'Auth Logs', path: '/admin/auth-logs', icon: ShieldAlert },
-    { name: 'Audit Trail', path: '/admin/audit-logs', icon: ClipboardList },
-    { name: 'Settings', path: '/admin/settings', icon: SettingsIcon },
-  ];
+    { name: 'Overview', path: '/admin/dashboard', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK', 'VIEWER'] },
+    { name: 'Room Directory', path: '/admin/rooms', icon: BedDouble, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK'] },
+    { name: 'Active Sessions', path: '/admin/sessions', icon: Activity, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK'] },
+    { name: 'Auth Logs', path: '/admin/auth-logs', icon: ShieldAlert, roles: ['SUPER_ADMIN', 'IT_ADMIN'] },
+    { name: 'Audit Trail', path: '/admin/audit-logs', icon: ClipboardList, roles: ['SUPER_ADMIN'] },
+    { name: 'Settings', path: '/admin/settings', icon: SettingsIcon, roles: ['SUPER_ADMIN'] },
+  ].filter(item => item.roles.includes(userRole));
 
   const getPageTitle = () => {
     const item = navItems.find(item => location.pathname.includes(item.path));
@@ -86,12 +90,12 @@ export default function AdminLayout() {
         
         <div className="mt-auto p-4 border-t border-slate-200/75 shrink-0">
           <div className="flex items-center gap-3 px-3 py-2 mb-2 rounded-md bg-slate-50 border border-slate-100">
-            <div className="w-8 h-8 bg-madocs-blue-light rounded-full flex items-center justify-center text-white font-medium text-xs">
-              AD
+            <div className="w-8 h-8 bg-madocs-blue-light rounded-full flex items-center justify-center text-white font-medium text-xs uppercase">
+              {adminUser?.username?.substring(0, 2) || 'AD'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-900 truncate">Administrator</p>
-              <p className="text-xs text-slate-500 truncate">IT Department</p>
+              <p className="text-sm font-medium text-slate-900 truncate">{adminUser?.username || 'Administrator'}</p>
+              <p className="text-xs text-slate-500 truncate">{userRole.replace('_', ' ')}</p>
             </div>
           </div>
           <button

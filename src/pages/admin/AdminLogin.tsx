@@ -20,7 +20,9 @@ export default function AdminLogin() {
       });
       
       if (res.ok) {
+        const data = await res.json();
         localStorage.setItem('admin_auth', 'true');
+        localStorage.setItem('admin_user', JSON.stringify(data.user));
         navigate('/admin/dashboard');
       } else {
         setError('Invalid username or password');
@@ -69,8 +71,11 @@ export default function AdminLogin() {
         </form>
         
         <div className="mt-6 text-center text-xs text-slate-500">
-          <p>Demo Credentials:</p>
-          <p>admin / admin</p>
+          <p>Roles testing (u/p):</p>
+          <p>admin / admin (SUPER_ADMIN)</p>
+          <p>itadmin / itadmin (IT_ADMIN)</p>
+          <p>frontdesk / frontdesk (FRONT_DESK)</p>
+          <p>viewer / viewer (VIEWER)</p>
         </div>
       </div>
     </div>
