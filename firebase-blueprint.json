@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Administrator account.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "maxLength": 50 },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "SYSTEM_ADMIN", "HOSPITAL_ADMIN", "HELPDESK", "VIEWER"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["username", "role"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Room and patient association.",
+      "type": "object",
+      "properties": {
+        "room_number": { "type": "string", "maxLength": 20 },
+        "patient_last_name": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "EXPIRED", "DISCHARGED"] },
+        "valid_from": { "type": "string" },
+        "valid_until": { "type": "string" },
+        "max_devices": { "type": "number" },
+        "session_duration_minutes": { "type": "number" },
+        "access_profile": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["room_number", "patient_last_name", "status", "valid_from", "valid_until"]
+    },
+    "WifiSession": {
+      "title": "WifiSession",
+      "description": "Active or historical Wi-Fi session.",
+      "type": "object",
+      "properties": {
+        "room_id": { "type": "string" },
+        "network_username": { "type": "string", "maxLength": 100 },
+        "client_mac": { "type": "string", "maxLength": 50 },
+        "client_ip": { "type": "string", "maxLength": 50 },
+        "ssid": { "type": "string", "maxLength": 100 },
+        "access_point": { "type": "string", "maxLength": 100 },
+        "nas_identifier": { "type": "string", "maxLength": 100 },
+        "radius_session_id": { "type": "string", "maxLength": 100 },
+        "started_at": { "type": "string" },
+        "ended_at": { "type": "string" },
+        "session_status": { "type": "string", "enum": ["ACTIVE", "EXPIRED", "DISCONNECTED"] }
+      },
+      "required": ["room_id", "network_username", "session_status", "started_at"]
+    },
+    "AuthenticationAttempt": {
+      "title": "AuthenticationAttempt",
+      "description": "Log of a login attempt.",
+      "type": "object",
+      "properties": {
+        "room_number": { "type": "string", "maxLength": 20 },
+        "client_mac": { "type": "string", "maxLength": 50 },
+        "client_ip": { "type": "string", "maxLength": 50 },
+        "ssid": { "type": "string", "maxLength": 100 },
+        "result": { "type": "string", "maxLength": 50 },
+        "failure_reason": { "type": "string", "maxLength": 255 },
+        "created_at": { "type": "string" }
+      },
+      "required": ["room_number", "result", "created_at"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Administrator audit log.",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string" },
+        "administrator": { "type": "string", "maxLength": 100 },
+        "action": { "type": "string", "maxLength": 100 },
+        "module": { "type": "string", "maxLength": 50 },
+        "record_id": { "type": "string", "maxLength": 50 },
+        "old_value": { "type": "string" },
+        "new_value": { "type": "string" },
+        "ip_address": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["timestamp", "administrator", "action"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "System configuration key-value pair.",
+      "type": "object",
+      "properties": {
+        "value": { "type": "string" },
+        "updated_at": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Administrator accounts."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/Room" },
+      "description": "Rooms and their associated patient/validity data."
+    },
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/WifiSession" },
+      "description": "Wi-Fi sessions."
+    },
+    "/authLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuthenticationAttempt" },
+      "description": "Logs for guest authentication attempts."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Admin action audit logs."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SystemSetting" },
+      "description": "System-wide settings."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-madocs-blue: #003366;
+  --color-madocs-blue-light: #004d99;
+  --color-madocs-blue-dark: #002244;
+  
+  --color-madocs-gold: #FDB913;
+  --color-madocs-gold-light: #FDC640;
+  
+  --color-madocs-surface: #F8FAFC;
+}
+
+@layer base {
+  body {
+    @apply bg-madocs-surface text-slate-800 font-sans antialiased;
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Manila Doctors Hospital Wi-Fi Portal",
+  "description": "A captive portal and administration system for Manila Doctors Hospital guest Wi-Fi access.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
