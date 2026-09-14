@@ -6,6 +6,7 @@ export interface AuthRequest {
   ssid?: string;
   apMac?: string;
   accessProfile?: string;
+  sessionTimeout?: number;
 }
 
 export interface AuthResponse {
@@ -19,6 +20,14 @@ export interface DisconnectRequest {
   username: string;
   clientIp?: string;
   radiusSessionId?: string;
+}
+
+export interface AccountingRequest {
+  username: string;
+  statusType: 'Start' | 'Stop' | 'Interim-Update';
+  radiusSessionId: string;
+  clientIp?: string;
+  clientMac?: string;
 }
 
 export interface RadiusProvider {
@@ -41,6 +50,11 @@ export interface RadiusProvider {
    * Change authorization for an active session.
    */
   changeAuthorization(request: any): Promise<boolean>;
+
+  /**
+   * Send an accounting request to the RADIUS server.
+   */
+  accounting(request: AccountingRequest): Promise<boolean>;
 
   /**
    * Get the current status of the RADIUS server.

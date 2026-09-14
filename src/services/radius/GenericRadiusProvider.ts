@@ -1,6 +1,6 @@
 import * as radius from 'radius';
 import * as dgram from 'dgram';
-import { RadiusProvider, AuthRequest, AuthResponse, DisconnectRequest } from './RadiusProvider';
+import { RadiusProvider, AuthRequest, AuthResponse, DisconnectRequest, AccountingRequest } from './RadiusProvider';
 
 /**
  * Vendor-Neutral Live RADIUS Provider using standard IETF attributes.
@@ -28,14 +28,41 @@ export class GenericRadiusProvider implements RadiusProvider {
     return [];
   }
 
-  protected async sendUdpPacket(packet: Buffer, port: number): Promise<Buffer> {
+  protected async getActiveConfig() {
+    try {
+      const { DbClient } = await import('../../db/db.ts');
+      const settings = await DbClient.getSettings();
+      if (settings && settings.radiusHost) {
+        return {
+          host: settings.radiusHost,
+          port: settings.radiusPort || 1812,
+          acctPort: settings.radiusAccountingPort || 1813,
+          secret: settings.radiusSecret || this.secret,
+          timeoutMs: settings.radiusTimeout || 3000
+        };
+      }
+    } catch (e) {
+      console.warn('[RADIUS] Using fallback configuration');
+    }
+    return {
+      host: this.host,
+      port: this.port,
+      acctPort: 1813,
+      secret: this.secret,
+      timeoutMs: 3000
+    };
+  }
+
+  protected async sendUdpPacket(packet: Buffer, defaultPort: number): Promise<Buffer> {
+    const config = await this.getActiveConfig();
+    
     return new Promise((resolve, reject) => {
       const client = dgram.createSocket('udp4');
       
       const timeout = setTimeout(() => {
         client.close();
         reject(new Error('RADIUS_UNAVAILABLE'));
-      }, 3000); // 3 second timeout
+      }, config.timeoutMs);
 
       client.on('message', (msg) => {
         clearTimeout(timeout);
@@ -49,7 +76,7 @@ export class GenericRadiusProvider implements RadiusProvider {
         reject(err);
       });
 
-      client.send(packet, 0, packet.length, port, this.host, (err) => {
+      client.send(packet, 0, packet.length, defaultPort, config.host, (err) => {
         if (err) {
           clearTimeout(timeout);
           client.close();
@@ -60,7 +87,8 @@ export class GenericRadiusProvider implements RadiusProvider {
   }
 
   async authenticate(request: AuthRequest): Promise<AuthResponse> {
-    console.log(`[RADIUS LIVE] Sending Access-Request to ${this.host}:${this.port}`);
+    const config = await this.getActiveConfig();
+    console.log(`[RADIUS LIVE] Sending Access-Request to ${config.host}:${config.port}`);
     
     // Vendor-neutral RADIUS dictionary mappings
     const attributes: string[][] = [
@@ -69,18 +97,19 @@ export class GenericRadiusProvider implements RadiusProvider {
       ...(request.clientMac ? [['Calling-Station-Id', request.clientMac]] : []),
       ...(request.apMac ? [['Called-Station-Id', `${request.apMac}${request.ssid ? ':' + request.ssid : ''}`]] : []),
       ...(request.clientIp ? [['Framed-IP-Address', request.clientIp]] : []),
+      ...(request.sessionTimeout ? [['Session-Timeout', request.sessionTimeout.toString()]] : []),
       ...this.getAccessProfileAttributes(request.accessProfile)
     ];
 
     try {
       const encoded = radius.encode({
         code: 'Access-Request',
-        secret: this.secret,
+        secret: config.secret,
         attributes: attributes
       });
 
-      const response = await this.sendUdpPacket(encoded, this.port);
-      const decoded = radius.decode({ packet: response, secret: this.secret });
+      const response = await this.sendUdpPacket(encoded, config.port);
+      const decoded = radius.decode({ packet: response, secret: config.secret });
       
       const isAccept = decoded.code === 'Access-Accept';
       console.log(`[RADIUS LIVE] Received ${decoded.code}`);
@@ -105,6 +134,7 @@ export class GenericRadiusProvider implements RadiusProvider {
   }
 
   async disconnect(request: DisconnectRequest): Promise<boolean> {
+    const config = await this.getActiveConfig();
     console.log(`[RADIUS LIVE] Sending Disconnect-Request (CoA) for ${request.username}`);
     
     const attributes: string[][] = [
@@ -116,13 +146,14 @@ export class GenericRadiusProvider implements RadiusProvider {
     try {
       const encoded = radius.encode({
         code: 'Disconnect-Request',
-        secret: this.secret,
+        secret: config.secret,
         attributes: attributes
       });
 
-      // RADIUS CoA/Disconnect usually uses port 3799
-      const response = await this.sendUdpPacket(encoded, 3799);
-      const decoded = radius.decode({ packet: response, secret: this.secret });
+      // RADIUS CoA typically uses port 3799
+      const coaPort = (config as any).coaPort || 3799;
+      const response = await this.sendUdpPacket(encoded, coaPort);
+      const decoded = radius.decode({ packet: response, secret: config.secret });
       
       console.log(`[RADIUS LIVE] Received ${decoded.code}`);
       return decoded.code === 'Disconnect-ACK';
@@ -137,9 +168,56 @@ export class GenericRadiusProvider implements RadiusProvider {
     return true; // Simplified for now
   }
 
+  async accounting(request: AccountingRequest): Promise<boolean> {
+    const config = await this.getActiveConfig();
+    console.log(`[RADIUS LIVE] Sending Accounting-Request (${request.statusType}) for ${request.username}`);
+    
+    // Status types in RADIUS: Start (1), Stop (2), Interim-Update (3)
+    let statusTypeValue = 1;
+    if (request.statusType === 'Stop') statusTypeValue = 2;
+    if (request.statusType === 'Interim-Update') statusTypeValue = 3;
+
+    const attributes: string[][] = [
+      ['User-Name', request.username],
+      ['Acct-Status-Type', statusTypeValue.toString()],
+      ['Acct-Session-Id', request.radiusSessionId],
+      ...(request.clientIp ? [['Framed-IP-Address', request.clientIp]] : []),
+      ...(request.clientMac ? [['Calling-Station-Id', request.clientMac]] : []),
+    ];
+
+    try {
+      const encoded = radius.encode({
+        code: 'Accounting-Request',
+        secret: config.secret,
+        attributes: attributes
+      });
+
+      // RADIUS Accounting uses port 1813 by default
+      const response = await this.sendUdpPacket(encoded, config.acctPort || 1813);
+      const decoded = radius.decode({ packet: response, secret: config.secret });
+      
+      console.log(`[RADIUS LIVE] Received ${decoded.code}`);
+      return decoded.code === 'Accounting-Response';
+    } catch (error: any) {
+      console.error('[RADIUS LIVE] Error in Accounting:', error.message);
+      return false;
+    }
+  }
+
   async getStatus(): Promise<'ONLINE' | 'OFFLINE' | 'MOCK'> {
-    // Could send an empty Access-Request or ping the port to determine status
-    // For now we assume offline until a request succeeds or fails with a proper response.
-    return 'ONLINE';
+    // Attempt a dummy Access-Request to check status
+    try {
+      const config = await this.getActiveConfig();
+      const encoded = radius.encode({
+        code: 'Access-Request',
+        secret: config.secret,
+        attributes: [['User-Name', 'dummy']]
+      });
+      // Ping the auth port
+      await this.sendUdpPacket(encoded, config.port);
+      return 'ONLINE';
+    } catch (e) {
+      return 'OFFLINE';
+    }
   }
 }

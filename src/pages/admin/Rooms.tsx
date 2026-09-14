@@ -4,7 +4,8 @@ import { Plus, Search, Edit2, Trash2, PowerOff, X } from 'lucide-react';
 export default function Rooms() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newRoomData, setNewRoomData] = useState({ room_number: '', patient_last_name: '', days_valid: 3, access_profile: 'STANDARD' });
+  const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
+  const [newRoomData, setNewRoomData] = useState({ room_number: '', patient_last_name: '', days_valid: 3, access_profile: 'STANDARD', status: 'ACTIVE' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const adminUserStr = localStorage.getItem('admin_user');
@@ -15,6 +16,28 @@ export default function Rooms() {
   useEffect(() => {
     fetchRooms();
   }, []);
+
+  const openEditModal = (room: any) => {
+    setEditingRoomId(room.id);
+    const validUntilDate = new Date(room.valid_until);
+    const diffTime = Math.abs(validUntilDate.getTime() - new Date().getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    setNewRoomData({
+      room_number: room.room_number,
+      patient_last_name: room.patient_last_name,
+      days_valid: diffDays > 0 ? diffDays : 1,
+      access_profile: room.access_profile || 'STANDARD',
+      status: room.status
+    });
+    setIsModalOpen(true);
+  };
+
+  const openAddModal = () => {
+    setEditingRoomId(null);
+    setNewRoomData({ room_number: '', patient_last_name: '', days_valid: 3, access_profile: 'STANDARD', status: 'ACTIVE' });
+    setIsModalOpen(true);
+  };
 
   const fetchRooms = async () => {
     try {
@@ -51,14 +74,18 @@ export default function Rooms() {
     
     const validUntil = new Date(Date.now() + 86400000 * newRoomData.days_valid).toISOString();
 
-    const res = await fetch('/api/v1/admin/rooms', {
-      method: 'POST',
+    const url = editingRoomId ? `/api/v1/admin/rooms/${editingRoomId}` : '/api/v1/admin/rooms';
+    const method = editingRoomId ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         room_number: newRoomData.room_number,
         patient_last_name: newRoomData.patient_last_name,
         valid_until: validUntil,
-        access_profile: newRoomData.access_profile
+        access_profile: newRoomData.access_profile,
+        ...(editingRoomId && { status: newRoomData.status }) // Include status only if editing
       })
     });
 
@@ -66,7 +93,7 @@ export default function Rooms() {
 
     if (res.ok) {
       setIsModalOpen(false);
-      setNewRoomData({ room_number: '', patient_last_name: '', days_valid: 3, access_profile: 'STANDARD' });
+      setNewRoomData({ room_number: '', patient_last_name: '', days_valid: 3, access_profile: 'STANDARD', status: 'ACTIVE' });
       fetchRooms();
     }
   };
@@ -77,7 +104,7 @@ export default function Rooms() {
         <h1 className="text-2xl font-bold text-slate-900">Room Management</h1>
         {canManageRooms && (
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={openAddModal}
             className="bg-madocs-blue text-white px-4 py-2.5 rounded-lg font-medium hover:bg-madocs-blue-light transition-colors flex items-center gap-2 shadow-sm"
           >
             <Plus className="w-4 h-4" /> Add Room / Patient
@@ -127,7 +154,7 @@ export default function Rooms() {
                   </td>
                   <td className="py-3 px-6 text-right space-x-2">
                     {canManageRooms && (
-                      <button className="p-1.5 text-slate-400 hover:text-madocs-blue rounded-md hover:bg-madocs-surface transition-colors" title="Edit">
+                      <button onClick={() => openEditModal(room)} className="p-1.5 text-slate-400 hover:text-madocs-blue rounded-md hover:bg-madocs-surface transition-colors" title="Edit">
                         <Edit2 className="w-4 h-4" />
                       </button>
                     )}
@@ -156,7 +183,7 @@ export default function Rooms() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900">Add Patient Room</h3>
+              <h3 className="text-lg font-bold text-slate-900">{editingRoomId ? 'Edit Patient Room' : 'Add Patient Room'}</h3>
               <button 
                 onClick={() => setIsModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -212,6 +239,20 @@ export default function Rooms() {
                     <option value="PREMIUM">Premium (20 Mbps)</option>
                   </select>
                 </div>
+                {editingRoomId && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                    <select
+                      value={newRoomData.status}
+                      onChange={(e) => setNewRoomData({ ...newRoomData, status: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue bg-white"
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="EXPIRED">Expired</option>
+                      <option value="DISCHARGED">Discharged</option>
+                    </select>
+                  </div>
+                )}
               </div>
               
               <div className="mt-8 flex justify-end gap-3">
@@ -227,7 +268,7 @@ export default function Rooms() {
                   disabled={isSubmitting}
                   className="px-4 py-2 text-sm font-medium text-white bg-madocs-blue hover:bg-madocs-blue-light rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : 'Authorize Room'}
+                  {isSubmitting ? 'Saving...' : (editingRoomId ? 'Update Room' : 'Authorize Room')}
                 </button>
               </div>
             </form>

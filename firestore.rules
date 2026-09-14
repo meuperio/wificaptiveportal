@@ -1,62 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} { 
-      allow read, write: if false; 
-    }
-
-    function isSignedIn() { return request.auth != null; }
-    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
-    
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-
-    function isValidRoom(data) {
-      return data.keys().hasAll(['room_number', 'patient_last_name', 'status', 'valid_from', 'valid_until']) &&
-             data.room_number is string && data.room_number.size() <= 20 &&
-             data.patient_last_name is string && data.patient_last_name.size() <= 100 &&
-             data.status is string && data.status.matches('^(ACTIVE|INACTIVE|EXPIRED|DISCHARGED)$');
-    }
-
-    function isValidSession(data) {
-      return data.keys().hasAll(['room_id', 'network_username', 'session_status', 'started_at']) &&
-             data.room_id is string && data.room_id.size() <= 128 &&
-             data.network_username is string && data.network_username.size() <= 100 &&
-             data.session_status is string && data.session_status.matches('^(ACTIVE|EXPIRED|DISCONNECTED)$');
-    }
-
-    match /admins/{adminId} {
-      allow read: if isSignedIn();
-      allow write: if false; 
-    }
-
-    match /rooms/{roomId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && isValidId(roomId) && isValidRoom(incoming());
-      allow update: if isAdmin() && isValidRoom(incoming());
-      allow delete: if isAdmin();
-    }
-
-    match /sessions/{sessionId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && isValidId(sessionId) && isValidSession(incoming());
-      allow update: if isAdmin() && isValidSession(incoming());
-      allow delete: if isAdmin();
-    }
-
-    match /authLogs/{logId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && isValidId(logId);
-      allow update: if false;
-      allow delete: if isAdmin();
-    }
-
-    match /auditLogs/{logId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && isValidId(logId);
-      allow update: if false;
-      allow delete: if isAdmin();
+    // Only the backend system service account can access the database.
+    // Client SDK is not used in the frontend. All traffic routes through Express.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

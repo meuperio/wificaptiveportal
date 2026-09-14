@@ -40,6 +40,11 @@ export class MockRadiusProvider implements RadiusProvider {
     return true;
   }
 
+  async accounting(request: import('./RadiusProvider').AccountingRequest): Promise<boolean> {
+    console.log(`[MOCK RADIUS] Accounting ${request.statusType} for ${request.username}`);
+    return true;
+  }
+
   async getStatus(): Promise<'ONLINE' | 'OFFLINE' | 'MOCK'> {
     return 'MOCK';
   }

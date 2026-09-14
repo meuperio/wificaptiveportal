@@ -7,6 +7,7 @@ export const mockDb = {
   wifiSessions: [] as any[],
   auditLogs: [] as any[],
   authAttempts: [] as any[],
+  blockedDevices: [] as any[],
   settings: {
     hospitalName: 'General Hospital',
     portalMessage: 'Welcome to our Guest Wi-Fi',
@@ -14,9 +15,19 @@ export const mockDb = {
     primaryColor: '#003366',
     termsText: 'By using this service, you agree to our Terms of Service and Acceptable Use Policy.',
     privacyLink: '#',
+    redirectUrl: 'https://www.maniladoctors.com.ph/',
+    supportEmail: 'support@hospital.org',
+    supportPhone: '+1-800-555-0199',
+    sessionTimeout: 28800,
+    maxDevicesPerRoom: 3,
+    rateLimitFailures: 20,
     radiusHost: '127.0.0.1',
     radiusPort: 1812,
-    radiusSecret: 'testing123'
+    radiusAccountingPort: 1813,
+    radiusCoaPort: 3799,
+    radiusSecret: 'testing123',
+    radiusTimeout: 3000,
+    radiusRetries: 3
   }
 };
 
@@ -26,25 +37,25 @@ export function initMockDb() {
     {
       id: 1,
       username: 'admin',
-      password_hash: 'admin', // Very insecure MVP mock
+      password_hash: '$2b$10$n3SFJJogQte5bE5YHm/WNurgW4DX/x594WIe8ZBnyhC8B9V5FCplG',
       role: 'SUPER_ADMIN'
     },
     {
       id: 2,
       username: 'itadmin',
-      password_hash: 'itadmin',
+      password_hash: '$2b$10$riL2g58KPuUeOMKzlnnCv.Pzds/Ba8XDpfW6TNWSH6xnXoREm4Ee6',
       role: 'IT_ADMIN'
     },
     {
       id: 3,
       username: 'frontdesk',
-      password_hash: 'frontdesk',
+      password_hash: '$2b$10$6/9hZflYYroxqdjig3WOgehxT.SfBIDl1VEyvIQSmHOC1o5cvf76O',
       role: 'FRONT_DESK'
     },
     {
       id: 4,
       username: 'viewer',
-      password_hash: 'viewer',
+      password_hash: '$2b$10$5cy8kWozgkhOK0a2lyqyDOgHaZel217bSJtuqvOpAt46bw6oruYsG',
       role: 'VIEWER'
     }
   ];

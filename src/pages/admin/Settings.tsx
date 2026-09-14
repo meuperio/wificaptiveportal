@@ -9,12 +9,23 @@ export default function Settings() {
     primaryColor: '#003366',
     termsText: '',
     privacyLink: '',
+    redirectUrl: '',
+    supportEmail: '',
+    supportPhone: '',
+    sessionTimeout: 28800,
+    maxDevicesPerRoom: 3,
+    rateLimitFailures: 20,
     radiusHost: '',
     radiusPort: 1812,
-    radiusSecret: ''
+    radiusAccountingPort: 1813,
+    radiusCoaPort: 3799,
+    radiusSecret: '',
+    radiusTimeout: 3000,
+    radiusRetries: 3
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -37,6 +48,19 @@ export default function Settings() {
     setIsSaving(false);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  const handleTestRadius = async () => {
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/v1/admin/settings/test-radius', {
+        method: 'POST'
+      });
+      const data = await res.json();
+      setTestResult({ success: res.ok, message: data.message || (res.ok ? 'Connection successful' : 'Connection failed') });
+    } catch (err) {
+      setTestResult({ success: false, message: 'Network error while testing RADIUS' });
+    }
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,25 +128,37 @@ export default function Settings() {
         </div>
 
         {/* Text Settings */}
-        <div className="space-y-4">
-          <h2 className="text-base font-semibold text-slate-900 mb-4 border-b border-slate-100 pb-2">Portal Texts</h2>
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900 mb-4 pb-2">Portal Texts & Links</h2>
           
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Hospital Name</label>
-            <input
-              type="text"
-              value={settings.hospitalName}
-              onChange={e => setSettings(prev => ({ ...prev, hospitalName: e.target.value }))}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
-              placeholder="Manila Doctors Hospital"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Hospital Name</label>
+              <input
+                type="text"
+                value={settings.hospitalName}
+                onChange={e => setSettings(prev => ({ ...prev, hospitalName: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                placeholder="Manila Doctors Hospital"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Success Redirect URL</label>
+              <input
+                type="url"
+                value={settings.redirectUrl}
+                onChange={e => setSettings(prev => ({ ...prev, redirectUrl: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                placeholder="https://hospital.org/welcome"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Portal Welcome Message</label>
             <textarea
               value={settings.portalMessage}
               onChange={e => setSettings(prev => ({ ...prev, portalMessage: e.target.value }))}
-              rows={3}
+              rows={2}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
               placeholder="Welcome to our Guest Wi-Fi"
             />
@@ -167,9 +203,82 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Global Security & Session Policies */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900 mb-4 pb-2">Security & Session Policy</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Default Session Timeout (s)</label>
+              <input
+                type="number"
+                value={settings.sessionTimeout}
+                onChange={e => setSettings(prev => ({ ...prev, sessionTimeout: parseInt(e.target.value) || 28800 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Max Devices / Room</label>
+              <input
+                type="number"
+                value={settings.maxDevicesPerRoom}
+                onChange={e => setSettings(prev => ({ ...prev, maxDevicesPerRoom: parseInt(e.target.value) || 3 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Global IP Rate Limit</label>
+              <input
+                type="number"
+                value={settings.rateLimitFailures}
+                onChange={e => setSettings(prev => ({ ...prev, rateLimitFailures: parseInt(e.target.value) || 20 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                title="Max failures per 10 minutes"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Support Email</label>
+              <input
+                type="email"
+                value={settings.supportEmail}
+                onChange={e => setSettings(prev => ({ ...prev, supportEmail: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                placeholder="support@hospital.org"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Support Phone</label>
+              <input
+                type="text"
+                value={settings.supportPhone}
+                onChange={e => setSettings(prev => ({ ...prev, supportPhone: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue"
+                placeholder="+1-800-555-0199"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* RADIUS Settings */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
-          <h2 className="text-base font-semibold text-slate-900 mb-4 pb-2">RADIUS Server Configuration</h2>
+          <div className="flex items-center justify-between mb-4 pb-2">
+            <h2 className="text-base font-semibold text-slate-900">RADIUS Server Configuration</h2>
+            <button 
+              type="button" 
+              onClick={handleTestRadius}
+              className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+            >
+              Test Connection
+            </button>
+          </div>
+          
+          {testResult && (
+            <div className={`p-3 rounded-lg text-sm ${testResult.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {testResult.message}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">RADIUS Host IP</label>
@@ -182,7 +291,19 @@ export default function Settings() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">RADIUS Port</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Shared Secret</label>
+              <input
+                type="password"
+                value={settings.radiusSecret}
+                onChange={e => setSettings(prev => ({ ...prev, radiusSecret: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue font-mono text-sm"
+                placeholder="••••••••••••"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Auth Port</label>
               <input
                 type="number"
                 value={settings.radiusPort}
@@ -191,16 +312,36 @@ export default function Settings() {
                 placeholder="1812"
               />
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Shared Secret</label>
-            <input
-              type="password"
-              value={settings.radiusSecret}
-              onChange={e => setSettings(prev => ({ ...prev, radiusSecret: e.target.value }))}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue font-mono text-sm"
-              placeholder="••••••••••••"
-            />
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Acct Port</label>
+              <input
+                type="number"
+                value={settings.radiusAccountingPort}
+                onChange={e => setSettings(prev => ({ ...prev, radiusAccountingPort: parseInt(e.target.value) || 1813 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue font-mono text-sm"
+                placeholder="1813"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">CoA Port</label>
+              <input
+                type="number"
+                value={settings.radiusCoaPort}
+                onChange={e => setSettings(prev => ({ ...prev, radiusCoaPort: parseInt(e.target.value) || 3799 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue font-mono text-sm"
+                placeholder="3799"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Timeout (ms)</label>
+              <input
+                type="number"
+                value={settings.radiusTimeout}
+                onChange={e => setSettings(prev => ({ ...prev, radiusTimeout: parseInt(e.target.value) || 3000 }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-madocs-blue font-mono text-sm"
+                placeholder="3000"
+              />
+            </div>
           </div>
         </div>
         

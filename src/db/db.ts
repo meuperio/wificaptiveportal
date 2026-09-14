@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, collection, getDocs, query, where, addDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, query, where, addDoc, updateDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { mockDb } from './mockDb.ts';
 
@@ -13,6 +13,14 @@ export const DbClient = {
   async getRoom(roomNumber: string, lastName: string) {
     if (!auth.currentUser) return mockDb.rooms.find(r => r.room_number.toUpperCase() === roomNumber && r.patient_last_name.toUpperCase() === lastName);
     const q = query(collection(db, 'rooms'), where('room_number', '==', roomNumber), where('patient_last_name', '==', lastName));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() };
+  },
+
+  async getRoomByNumber(roomNumber: string) {
+    if (!auth.currentUser) return mockDb.rooms.find(r => r.room_number.toUpperCase() === roomNumber.toUpperCase());
+    const q = query(collection(db, 'rooms'), where('room_number', '==', roomNumber));
     const snap = await getDocs(q);
     if (snap.empty) return null;
     return { id: snap.docs[0].id, ...snap.docs[0].data() };
@@ -54,6 +62,66 @@ export const DbClient = {
     const snap = await getDocs(q);
     if (snap.empty) return null;
     return { id: snap.docs[0].id, ...snap.docs[0].data() };
+  },
+
+  async getAdminById(id: string | number) {
+    if (!auth.currentUser) return mockDb.adminUsers.find(a => String(a.id) === String(id));
+    // For firestore we can assume id is doc id, but let's check if it's stored as 'id' field for backwards compatibility
+    const q = query(collection(db, 'admins'), where('id', '==', Number(id)));
+    const snap = await getDocs(q);
+    if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() };
+    
+    const docSnap = await getDoc(doc(db, 'admins', String(id)));
+    if (docSnap.exists()) return { id: docSnap.id, ...docSnap.data() };
+    return null;
+  },
+
+  async getAdmins() {
+    if (!auth.currentUser) return mockDb.adminUsers;
+    const snap = await getDocs(collection(db, 'admins'));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async addAdmin(adminData: any) {
+    if (!auth.currentUser) {
+       const newAdmin = { id: mockDb.adminUsers.length + 1, ...adminData };
+       mockDb.adminUsers.push(newAdmin);
+       return newAdmin;
+    }
+    // Give it a numeric id for compatibility if needed
+    const snap = await getDocs(collection(db, 'admins'));
+    const nextId = snap.docs.length > 0 ? Math.max(...snap.docs.map(d => d.data().id || 0)) + 1 : 1;
+    const docRef = await addDoc(collection(db, 'admins'), { ...adminData, id: nextId });
+    return { id: docRef.id, ...adminData };
+  },
+
+  async updateAdmin(id: string | number, data: any) {
+    if (!auth.currentUser) {
+       const index = mockDb.adminUsers.findIndex(u => String(u.id) === String(id));
+       if (index !== -1) mockDb.adminUsers[index] = { ...mockDb.adminUsers[index], ...data };
+       return;
+    }
+    const q = query(collection(db, 'admins'), where('id', '==', Number(id)));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      await updateDoc(doc(db, 'admins', snap.docs[0].id), data);
+      return;
+    }
+    await updateDoc(doc(db, 'admins', String(id)), data);
+  },
+
+  async deleteAdmin(id: string | number) {
+    if (!auth.currentUser) {
+       mockDb.adminUsers = mockDb.adminUsers.filter(u => String(u.id) !== String(id));
+       return;
+    }
+    const q = query(collection(db, 'admins'), where('id', '==', Number(id)));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      await deleteDoc(doc(db, 'admins', snap.docs[0].id));
+      return;
+    }
+    await deleteDoc(doc(db, 'admins', String(id)));
   },
 
   async getRooms() {
@@ -119,6 +187,34 @@ export const DbClient = {
     await updateDoc(doc(db, 'sessions', id), { session_status: 'DISCONNECTED' });
   },
 
+  async blockDevice(macAddress: string, reason: string) {
+    if (!auth.currentUser) {
+      mockDb.blockedDevices.push({ mac: macAddress, reason, blocked_at: new Date().toISOString() });
+      return;
+    }
+    await addDoc(collection(db, 'blockedDevices'), { mac: macAddress, reason, blocked_at: new Date().toISOString() });
+  },
+
+  async isDeviceBlocked(macAddress: string) {
+    if (!auth.currentUser) {
+      return mockDb.blockedDevices.some(d => d.mac === macAddress);
+    }
+    const q = query(collection(db, 'blockedDevices'), where('mac', '==', macAddress));
+    const snap = await getDocs(q);
+    return !snap.empty;
+  },
+
+  async unblockDevice(macAddress: string) {
+    if (!auth.currentUser) {
+      mockDb.blockedDevices = mockDb.blockedDevices.filter(d => d.mac !== macAddress);
+      return;
+    }
+    const q = query(collection(db, 'blockedDevices'), where('mac', '==', macAddress));
+    const snap = await getDocs(q);
+    const deletePromises = snap.docs.map(d => deleteDoc(doc(db, 'blockedDevices', d.id)));
+    await Promise.all(deletePromises);
+  },
+
   async logAudit(data: any) {
     if (!auth.currentUser) {
       mockDb.auditLogs.push(data);
@@ -143,10 +239,26 @@ export const DbClient = {
   },
 
   async authenticateBackend() {
-    if (process.env.FIREBASE_BACKEND_EMAIL && process.env.FIREBASE_BACKEND_PASSWORD) {
+    if (process.env.FIREBASE_SYSTEM_EMAIL && process.env.FIREBASE_SYSTEM_PASSWORD) {
        try {
-         await signInWithEmailAndPassword(auth, process.env.FIREBASE_BACKEND_EMAIL, process.env.FIREBASE_BACKEND_PASSWORD);
+         await signInWithEmailAndPassword(auth, process.env.FIREBASE_SYSTEM_EMAIL, process.env.FIREBASE_SYSTEM_PASSWORD);
          console.log('Firebase Backend Authenticated');
+         
+         // Seed the initial SUPER_ADMIN if admins collection is empty
+         const snap = await getDocs(collection(db, 'admins'));
+         if (snap.empty) {
+            console.log('Seeding initial SUPER_ADMIN...');
+            // Need bcrypt hash for 'admin'
+            // We'll insert a pre-hashed string for 'admin' 
+            const hash = '$2b$10$n3SFJJogQte5bE5YHm/WNurgW4DX/x594WIe8ZBnyhC8B9V5FCplG';
+            await addDoc(collection(db, 'admins'), {
+               id: 1,
+               username: 'admin',
+               password_hash: hash,
+               role: 'SUPER_ADMIN'
+            });
+            console.log('Initial SUPER_ADMIN seeded.');
+         }
        } catch (err) {
          console.error('Firebase Backend Auth Failed:', err);
        }

@@ -19,18 +19,27 @@ router.post('/validate', async (req, res) => {
     const clientIp = req.ip || req.connection.remoteAddress || 'UNKNOWN';
     const clientMac = networkData?.client_mac || 'UNKNOWN';
 
+    // Get Global Settings
+    const settings = await DbClient.getSettings();
+    const maxGlobalFailures = settings.rateLimitFailures || 20;
+
     // Rate Limiting (WIFI-003 & Security Requirements)
+    const isBlocked = await DbClient.isDeviceBlocked(clientMac);
+    if (isBlocked) {
+      return res.status(403).json({ error: 'This device has been blocked from accessing the network. Please contact IT support.' });
+    }
+
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const allAttempts = await DbClient.getAllAuthAttempts();
     
-    // Check global IP/MAC rate limit (e.g. 20 failures per 10 mins globally)
+    // Check global IP/MAC rate limit
     const recentGlobalFailures = allAttempts.filter((a: any) => 
       a.result !== 'SUCCESS' && 
       new Date(a.created_at) > tenMinutesAgo &&
       (a.client_ip === clientIp || (clientMac !== 'UNKNOWN' && a.client_mac === clientMac))
     );
 
-    if (recentGlobalFailures.length >= 20) {
+    if (recentGlobalFailures.length >= maxGlobalFailures) {
       return res.status(429).json({ error: 'Too many requests from this device. Please wait 10 minutes before trying again.' });
     }
 
@@ -38,13 +47,13 @@ router.post('/validate', async (req, res) => {
     const recentRoomFailures = recentGlobalFailures.filter((a: any) => a.room_number === room);
 
     if (recentRoomFailures.length >= 5) {
-      return res.status(429).json({ error: 'Too many failed attempts for this room. Please wait 10 minutes before trying again or contact hospital staff.' });
+      return res.status(429).json({ error: `Too many failed attempts for this room. Please wait 10 minutes before trying again or contact hospital staff at ${settings.supportPhone || 'the front desk'}.` });
     }
 
     // Search active room/patient records
-    const record = await DbClient.getRoom(room, lastName);
+    const recordRoom = await DbClient.getRoom(room, lastName);
 
-    if (!record) {
+    if (!recordRoom) {
       // Record failure
       await DbClient.logAuthAttempt({
         room_number: room,
@@ -56,20 +65,20 @@ router.post('/validate', async (req, res) => {
       return res.status(401).json({ error: 'We could not validate the information provided. Please verify the room number and patient last name.' });
     }
 
-    if (record.status !== 'ACTIVE') {
+    if (recordRoom.status !== 'ACTIVE') {
       await DbClient.logAuthAttempt({
         room_number: room,
         client_ip: clientIp,
         client_mac: clientMac,
         result: 'EXPIRED',
-        failure_reason: `Status is ${record.status}`,
+        failure_reason: `Status is ${recordRoom.status}`,
         created_at: new Date().toISOString()
       });
       return res.status(401).json({ error: 'We could not validate the information provided. Please verify the room number and patient last name.' });
     }
 
     const now = new Date();
-    if (new Date(record.valid_from) > now || new Date(record.valid_until) < now) { 
+    if (new Date(recordRoom.valid_from) > now || new Date(recordRoom.valid_until) < now) { 
        await DbClient.logAuthAttempt({
         room_number: room,
         client_ip: clientIp,
@@ -82,14 +91,15 @@ router.post('/validate', async (req, res) => {
     }
 
     // Check Session Policy (WIFI-004)
-    const activeSessions = await DbClient.getActiveSessionsByRoom(String(record.id));
-    if (activeSessions.length >= (record.max_devices || 3)) {
+    const maxDevices = recordRoom.max_devices || settings.maxDevicesPerRoom || 3;
+    const activeSessions = await DbClient.getActiveSessionsByRoom(String(recordRoom.id));
+    if (activeSessions.length >= maxDevices) {
       await DbClient.logAuthAttempt({
         room_number: room,
         client_ip: clientIp,
         client_mac: clientMac,
         result: 'POLICY_REJECT',
-        failure_reason: `Max devices (${record.max_devices || 3}) reached`,
+        failure_reason: `Max devices (${maxDevices}) reached`,
         created_at: new Date().toISOString()
       });
       return res.status(403).json({ error: 'Device limit reached for this room. Disconnect another device before connecting.' });
@@ -105,7 +115,8 @@ router.post('/validate', async (req, res) => {
       apMac: networkData?.ap_mac,
       ssid: networkData?.ssid,
       clientIp,
-      accessProfile: record.access_profile
+      accessProfile: recordRoom.access_profile,
+      sessionTimeout: settings.sessionTimeout || 28800
     });
 
     if (!radiusRes.success) {
@@ -121,7 +132,7 @@ router.post('/validate', async (req, res) => {
 
     // Create session
     const session = {
-      room_id: String(record.id),
+      room_id: String(recordRoom.id),
       network_username: tempIdentity,
       radius_session_id: radiusRes.radiusSessionId,
       client_mac: networkData?.client_mac || 'UNKNOWN',

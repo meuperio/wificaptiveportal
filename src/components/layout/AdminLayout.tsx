@@ -26,10 +26,11 @@ export default function AdminLayout() {
 
   const navItems = [
     { name: 'Overview', path: '/admin/dashboard', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK', 'VIEWER'] },
-    { name: 'Room Directory', path: '/admin/rooms', icon: BedDouble, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK'] },
-    { name: 'Active Sessions', path: '/admin/sessions', icon: Activity, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK'] },
-    { name: 'Auth Logs', path: '/admin/auth-logs', icon: ShieldAlert, roles: ['SUPER_ADMIN', 'IT_ADMIN'] },
+    { name: 'Room Directory', path: '/admin/rooms', icon: BedDouble, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK', 'VIEWER'] },
+    { name: 'Active Sessions', path: '/admin/sessions', icon: Activity, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'FRONT_DESK', 'VIEWER'] },
+    { name: 'Auth Logs', path: '/admin/auth-logs', icon: ShieldAlert, roles: ['SUPER_ADMIN', 'IT_ADMIN', 'VIEWER'] },
     { name: 'Audit Trail', path: '/admin/audit-logs', icon: ClipboardList, roles: ['SUPER_ADMIN'] },
+    { name: 'Administrators', path: '/admin/users', icon: Users, roles: ['SUPER_ADMIN'] },
     { name: 'Settings', path: '/admin/settings', icon: SettingsIcon, roles: ['SUPER_ADMIN'] },
   ].filter(item => item.roles.includes(userRole));
 

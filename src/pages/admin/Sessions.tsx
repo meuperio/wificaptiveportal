@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { WifiOff, Search, Download } from 'lucide-react';
+import { WifiOff, Search, Download, Ban } from 'lucide-react';
 
 export default function Sessions() {
   const [sessions, setSessions] = useState<any[]>([]);
@@ -32,7 +32,14 @@ export default function Sessions() {
   };
 
   const handleDisconnect = async (id: number) => {
+    if (!confirm('Are you sure you want to disconnect this device?')) return;
     await fetch(`/api/v1/admin/sessions/${id}/disconnect`, { method: 'POST' });
+    fetchSessions();
+  };
+
+  const handleBlock = async (id: number, mac: string) => {
+    if (!confirm(`Are you sure you want to block the device with MAC: ${mac}? They will be permanently blocked from re-authenticating.`)) return;
+    await fetch(`/api/v1/admin/sessions/${id}/block`, { method: 'POST' });
     fetchSessions();
   };
 
@@ -99,12 +106,20 @@ export default function Sessions() {
                   </td>
                   <td className="py-3 px-6 text-right">
                     {session.session_status === 'ACTIVE' && ['SUPER_ADMIN', 'IT_ADMIN'].includes(userRole) && (
-                      <button 
-                        onClick={() => handleDisconnect(session.id)}
-                        className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700 font-medium ml-auto px-2 py-1 hover:bg-red-50 rounded-md transition-colors"
-                      >
-                        <WifiOff className="w-4 h-4" /> Disconnect
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => handleDisconnect(session.id)}
+                          className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-800 font-medium px-2 py-1 hover:bg-slate-100 rounded-md transition-colors"
+                        >
+                          <WifiOff className="w-4 h-4" /> Disconnect
+                        </button>
+                        <button 
+                          onClick={() => handleBlock(session.id, session.client_mac)}
+                          className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700 font-medium px-2 py-1 hover:bg-red-50 rounded-md transition-colors"
+                        >
+                          <Ban className="w-4 h-4" /> Block
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
